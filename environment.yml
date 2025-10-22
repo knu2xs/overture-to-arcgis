@@ -1,4 +1,4 @@
-name: overture_to_arcgis
+name: arcgis_overture
 
 channels:
   - esri
@@ -9,32 +9,22 @@ dependencies:
   - arcgis
   - arcgis-mapping
   - black>=21
-  - cookiecutter
-  - dask
-  - h3-py
   - jupyterlab
   - jupyterlab_code_formatter
   - nodejs
   - pip
   - pytest
   - pyarrow
-  - pyyaml
-  - scipy
-  - scikit-learn
-  - seaborn
-  - swifter
-  - tabulate
-  - tqdm
   - pip:
-    - azure-storage-blob
-    - boto3
     - build
     - bump2version
+    - geomet>=1.0.0
+    - h3>=4.3.1
     - mkdocs
     - mkdocs-glightbox
     - mkdocs-include-markdown-plugin
     - mkdocs-jupyter
     - mkdocs-material
     - mkdocstrings[python]>=0.18
-    - placekey
     - twine
+    - wheel

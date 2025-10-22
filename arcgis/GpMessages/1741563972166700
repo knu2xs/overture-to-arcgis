@@ -1,0 +1,7 @@
+﻿<?xml version="1.0" encoding="utf-8"?><messages><msg code="0" type="2">Start Time: Wednesday, 22 October, 2025 15:16:29</msg><msg code="0" type="0">2025-10-22 15:16:29,833 | overture_to_arcgis.GetOvertureFeatures | INFO | Projecting extent to WGS84 (EPSG:4326).</msg><msg code="0" type="0">2025-10-22 15:16:29,833 | overture_to_arcgis.GetOvertureFeatures | INFO | Retrieving 'place' features for extent: (-122.91068680783754, 47.024129584974816, -122.88716881847785, 47.059775022024546).</msg><msg code="1" type="100">﻿Traceback (most recent call last):
+﻿  File "&lt;string&gt;", line 171, in execute
+﻿  File "D:\projects\overture-to-arcgis\src\overture_to_arcgis\__main__.py", line 105, in get_features
+﻿    if not has_arcpy:
+﻿           ^^^^^^^^^
+﻿NameError: name 'has_arcpy' is not defined
+</msg><msg code="-2147467259" type="100">Failed to execute (GetOvertureFeatures).</msg><msg code="0" type="3">Failed at Wednesday, 22 October, 2025 15:16:29 (Elapsed Time: 0.20 seconds)</msg></messages>
