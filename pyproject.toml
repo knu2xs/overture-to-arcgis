@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61.0", "setuptools-scm>=8.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "overture-to-arcgis"
+version = "0.0.0"
+authors = [
+  { name="Joel McCune (https://github.com/knu2xs)"},
+]
+description = "Utility for easily getting data from Overture into ArcGIS Pro."
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+]
+license = {file = "LICENSE"}
+dependencies = [
+    "arcgis>=2.2.0",
+    "numpy>=1.7",
+    "pandas>=1.0.5",
+    "pyarrow>=1.0.0"
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["overture_to_arcgis"]
