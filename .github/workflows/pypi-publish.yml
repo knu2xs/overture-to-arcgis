@@ -70,7 +70,7 @@ jobs:
     runs-on: ubuntu-latest
 
     environment:
-      name: testpypi
+      name: pypi
       url: https://test.pypi.org/p/overture-to-arcgis
 
     permissions:
