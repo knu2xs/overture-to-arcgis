@@ -1,0 +1,6 @@
+﻿<?xml version="1.0" encoding="utf-8"?><messages><msg code="0" type="2">Start Time: Wednesday, 22 October, 2025 17:03:16</msg><msg code="0" type="0">2025-10-22 17:03:16,569 | overture_to_arcgis.GetOvertureFeatures | INFO | Projecting extent to WGS84 (EPSG:4326).</msg><msg code="0" type="0">2025-10-22 17:03:16,570 | overture_to_arcgis.GetOvertureFeatures | INFO | Retrieving 'address' features for extent: (-122.97114022486309, 46.79021851479568, -122.57601443434288, 47.11923875974476).</msg><msg code="1" type="100">﻿Traceback (most recent call last):
+﻿  File "&lt;string&gt;", line 163, in execute
+﻿  File "D:\projects\overture-to-arcgis\src\overture_to_arcgis\utils\_arcgis.py", line 90, in add_primary_name
+﻿    for row in update_cursor:
+﻿RuntimeError: Cannot find field 'names'
+</msg><msg code="-2147467259" type="100">Failed to execute (GetOvertureFeatures).</msg><msg code="0" type="3">Failed at Wednesday, 22 October, 2025 17:04:00 (Elapsed Time: 44.44 seconds)</msg></messages>

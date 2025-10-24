@@ -32,6 +32,14 @@ has_pyarrow: bool = find_spec("pyarrow") is not None
 has_h3: bool = find_spec("h3") is not None
 
 
+def slugify(value: str) -> str:
+    """Convert a string to a slug format."""
+    value = value.lower()
+    value = value.replace(" ", "_")
+    value = "".join(char for char in value if char.isalnum() or char == "_")
+    return value
+
+
 def get_temp_dir() -> Path:
     """Get a temporary directory path."""
     temp_dir = Path(tempfile.gettempdir())

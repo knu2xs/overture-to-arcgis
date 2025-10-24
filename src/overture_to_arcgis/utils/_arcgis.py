@@ -7,6 +7,7 @@ import arcpy
 
 from overture_to_arcgis.utils.__main__ import get_overture_taxonomy_category_field_max_lengths, get_overture_taxonomy_dataframe
 
+from .__main__ import slugify
 from ._logging import get_logger
 
 # configure module logging
@@ -89,17 +90,17 @@ def add_primary_name(features: Union[arcpy._mp.Layer, str, Path]) -> None:
         # iterate through the rows
         for row in update_cursor:
             # get the name value and extract primary name
-            name_value = row[0]
+            name_str = row[0]
 
             # set the primary name if name_value is valid
             if (
-                name_value is not None
-                and isinstance(name_value, str)
-                and len(name_value) > 0
-                and not name_value.strip() == "None"
+                name_str is not None
+                and isinstance(name_str, str)
+                and len(name_str) > 0
+                and not name_str.strip() == "None"
             ):
                 # parse the name value into a dictionary
-                name_dict = eval(name_value)
+                name_dict = eval(name_str)
 
                 # extract the primary name
                 primary_name = name_dict.get("primary")
@@ -328,6 +329,111 @@ def add_alternate_category_field(features: Union[arcpy._mp.Layer, str, Path]) ->
     return
 
 
+def add_overture_taxonomy_fields(features: Union[str, Path, arcpy._mp.Layer], single_category_field: Optional[str] = None) -> None:
+    """
+    Add 'category_<n>' fields to the input features based on the Overture taxonomy based on the category provided for each row.
+    The category for each row can be specified using the `single_category_field` parameter.
+
+    !!! note
+        If a single category field is not provided, the function will attempt to read the value for the `primary` key from 
+        string JSON in the `categories` field, if this field exists.
+
+    Args:
+        features: The input feature layer or feature class.
+        single_category_field: The field name containing a single category.
+    """
+    # get a list of existing field names
+    field_names = [f.name for f in arcpy.ListFields(features)]
+
+    # if single category not provided, attempt to use the 'categories' field to extract the primary category
+    if single_category_field is None:
+
+        # ensure the 'categories' field exists
+        if "categories" not in field_names:
+            raise ValueError("Field for category extraction, 'categories', does not exist in features.")
+        
+        # create a generator to extract categories from the 'categories' field
+        categories_gen = (
+            eval(row[0]).get("primary")
+            for row in arcpy.da.SearchCursor(features, ["categories"])
+        )
+
+        # root name for the taxonomy fields
+        root_name = "primary_category"
+
+    # if single category field is provided
+    else:
+
+        # ensure the single category field exists
+        if single_category_field not in field_names:
+            raise ValueError(f"Provided single category field '{single_category_field}' does not exist in features.")
+        
+        # create a generator to extract categories from the single category field
+        categories_gen = (
+            row[0]
+            for row in arcpy.da.SearchCursor(features, [single_category_field])
+        )
+
+        # root name for the taxonomy fields
+        root_name = slugify(single_category_field)
+
+    # get taxonomy dataframe
+    taxonomy_df = get_overture_taxonomy_dataframe()
+
+    # get the max lengths for each category field
+    max_lengths = get_overture_taxonomy_category_field_max_lengths(taxonomy_df)
+
+    # set the index to category_code for easier lookup
+    taxonomy_df.set_index("category_code", inplace=True)
+
+    # only keep the category columns in the taxonomy dataframe
+    taxonomy_df = taxonomy_df.loc[:,[col for col in taxonomy_df.columns if col.startswith("category_")]]
+
+    # replace category in the field names with the root name
+    taxonomy_df.columns = [col.replace("category_", f"{root_name}_") for col in taxonomy_df.columns]
+    max_lengths = {col.replace("category_", f"{root_name}_"): max_len for col, max_len in max_lengths.items()}
+    
+    # iterate through the maximum lengths and add fields to the features
+    for col, max_len in max_lengths.items():
+
+        # add the field to the features
+        arcpy.management.AddField(
+            in_table=features,
+            field_name=col,
+            field_type="TEXT",
+            field_length=max_len,
+        )
+
+        logger.info(f"Added field '{col}' with length {max_len} to features.")
+
+    # calculate the category code fields from the categories generator
+    with arcpy.da.UpdateCursor(features, list(max_lengths.keys())) as update_cursor:
+        # iterate through the rows and categories
+        for row, category in zip(update_cursor, categories_gen):
+
+            # set the category fields if category is valid
+            if (
+                category is not None
+                and isinstance(category, str)
+                and len(category) > 0
+                and not category.strip() == "None"
+            ):
+                # get the taxonomy row for the category
+                taxonomy_row = taxonomy_df.loc[category]
+
+                # if a taxonomy row is found, set the category fields
+                if not taxonomy_row.empty:
+                    
+                    # iterate through the category fields and set their values
+                    for idx, col in enumerate(max_lengths.keys()):
+                        row[idx] = taxonomy_row.loc[col]
+
+                    # update the row
+                    update_cursor.updateRow(row)
+
+    return
+
+
 def add_website_field(features: Union[arcpy._mp.Layer, str, Path]) -> None:
     """
     Add a 'website' field to the input features if it does not already exist, and calculate from
@@ -381,70 +487,6 @@ def add_website_field(features: Union[arcpy._mp.Layer, str, Path]) -> None:
                         logger.warning(
                             f"Website exceeds 255 characters and will not be set for the feature: '{website}'"
                         )
-
-    return
-
-
-def add_overture_taxonomy_fields(features: Union[str, Path, arcpy._mp.Layer], primary_category_field: str = 'primary_category') -> None:
-    """
-    Add 'category_<n> fields to the input features based on the Overture taxonomy for
-    the primary category.
-    
-    Args:
-        features: The input feature layer or feature class.
-        primary_category_field: The field name containing the primary category.
-    """
-    # ensure the primary category field exists
-    field_names = [f.name for f in arcpy.ListFields(features)]
-    if primary_category_field not in field_names:
-        raise ValueError(f"Primary category field '{primary_category_field}' does not exist in features.")
-
-    # get the taxonomy dataframe
-    df = get_overture_taxonomy_dataframe()
-
-    # get the maximum lengths of each category field
-    max_lengths = get_overture_taxonomy_category_field_max_lengths(df)
-
-    # iterate through the maximum lengths and add fields to the features
-    for col, max_len in max_lengths.items():
-
-        # add the field to the features
-        arcpy.management.AddField(
-            in_table=features,
-            field_name=col,
-            field_type="TEXT",
-            field_length=max_len,
-        )
-
-        logger.info(f"Added field '{col}' with length {max_len} to features.")
-
-    # calculate the category code fields from the primary category field
-    with arcpy.da.UpdateCursor(features, [primary_category_field] + list(max_lengths.keys())) as update_cursor:
-        # iterate through the rows
-        for row in update_cursor:
-            # get the primary category value
-            primary_category_value = row[0]
-
-            # set the category fields if primary_category_value is valid
-            if (
-                primary_category_value is not None
-                and isinstance(primary_category_value, str)
-                and len(primary_category_value) > 0
-                and not primary_category_value.strip() == "None"
-            ):
-                # get the taxonomy row for the primary category
-                taxonomy_row = df[df['category_code'] == primary_category_value]
-
-                # if a taxonomy row is found, set the category fields
-                if not taxonomy_row.empty:
-                    
-                    # iterate through the category fields and set their values
-                    for idx, col in enumerate(max_lengths.keys(), start=1):
-                        category_value = taxonomy_row.iloc[0][col]
-                        row[idx] = category_value
-
-                    # update the row
-                    update_cursor.updateRow(row)
 
     return
 

@@ -149,6 +149,6 @@ def get_features(
     if len(fc_list) > 0:
         arcpy.management.Merge(fc_list, str(output_feature_class))
     else:
-        raise ValueError("No data found for the specified bounding box.")
+        logger.warning("No data found for the specified bounding box. No output feature class created.")
 
     return output_feature_class

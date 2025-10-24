@@ -1,0 +1,6 @@
+﻿<?xml version="1.0" encoding="utf-8"?><messages><msg code="0" type="2">Start Time: Wednesday, 22 October, 2025 15:46:14</msg><msg code="1" type="100">﻿Traceback (most recent call last):
+﻿  File "&lt;string&gt;", line 528, in execute
+﻿  File "D:\projects\overture-to-arcgis\src\overture_to_arcgis\utils\_arcgis.py", line 400, in add_overture_taxonomy_fields
+﻿    raise ValueError(f"Primary category field '{primary_category_field}' does not exist in features.")
+﻿ValueError: Primary category field 'primary_category' does not exist in features.
+</msg><msg code="-2147467259" type="100">Failed to execute (AddOvertureTaxonomyCodeFields).</msg><msg code="0" type="3">Failed at Wednesday, 22 October, 2025 15:46:14 (Elapsed Time: 0.29 seconds)</msg></messages>

@@ -1,0 +1,6 @@
+﻿<?xml version="1.0" encoding="utf-8"?><messages><msg code="0" type="2">Start Time: Wednesday, 22 October, 2025 16:48:15</msg><msg code="0" type="0">2025-10-22 16:48:15,910 | overture_to_arcgis.GetOvertureFeatures | INFO | Projecting extent to WGS84 (EPSG:4326).</msg><msg code="0" type="0">2025-10-22 16:48:15,910 | overture_to_arcgis.GetOvertureFeatures | INFO | Retrieving 'building_part' features for extent: (-122.91021837055283, 47.023312123473254, -122.88953564299457, 47.06028142823384).</msg><msg code="1" type="100">﻿Traceback (most recent call last):
+﻿  File "&lt;string&gt;", line 149, in execute
+﻿  File "D:\projects\overture-to-arcgis\src\overture_to_arcgis\__main__.py", line 152, in get_features
+﻿    raise ValueError("No data found for the specified bounding box.")
+﻿ValueError: No data found for the specified bounding box.
+</msg><msg code="-2147467259" type="100">Failed to execute (GetOvertureFeatures).</msg><msg code="0" type="3">Failed at Wednesday, 22 October, 2025 16:48:23 (Elapsed Time: 7.87 seconds)</msg></messages>
