@@ -25,7 +25,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-h3 = [h3]
+h3 = [
+  "h3"
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
