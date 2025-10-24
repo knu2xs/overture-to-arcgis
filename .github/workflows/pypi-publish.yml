@@ -52,6 +52,7 @@ jobs:
       url: https://pypi.org/p/overture-to-arcgis
     permissions:
       id-token: write  # IMPORTANT: mandatory for trusted publishing
+      contents: read  # needed to read the distribution files for publishing
 
     steps:
     - name: Download all the dists
@@ -74,6 +75,7 @@ jobs:
 
     permissions:
       id-token: write  # IMPORTANT: mandatory for trusted publishing
+      contents: read  # needed to read the distribution files for publishing
 
     steps:
     - name: Download all the dists
