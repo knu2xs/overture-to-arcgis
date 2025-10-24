@@ -15,7 +15,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: Apache Software License",
 ]
-license = {file = "LICENSE"}
+license = "Apache-2.0"
 dependencies = [
     "arcgis>=2.2.0",
     "geomet>=1.0.0",
