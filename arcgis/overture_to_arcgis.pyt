@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = "0.2.0.dev2"
+__version__ = "0.2.0"
 __author__ = "Joel McCune (https://github.com/knu2xs)"
 __license__ = "Apache 2.0"
 
