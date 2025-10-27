@@ -127,13 +127,13 @@ class GetOvertureFeatures:
 
         # if the spatial reference is not WGS84, project the extent to WGS84
         if spatial_reference.factoryCode != 4326:
-            self.logger.info("Projecting extent to WGS84 (EPSG:4326).")
+            logger.info("Projecting extent to WGS84 (EPSG:4326).")
             projected_extent = extent.projectAs(arcpy.SpatialReference(4326))
             bbox = (projected_extent.XMin, projected_extent.YMin, projected_extent.XMax, projected_extent.YMax)
         else:
             bbox = (extent.XMin, extent.YMin, extent.XMax, extent.YMax)
 
-        self.logger.info(f"Retrieving '{overture_type}' features for extent: {bbox}.")
+        logger.info(f"Retrieving '{overture_type}' features for extent: {bbox}.")
 
         # get features and write to output feature class
         overture_to_arcgis.get_features(out_fc, bbox=bbox, overture_type=overture_type)
@@ -539,7 +539,7 @@ class AddBooleanAccessRestrictionsFields:
         # retrieve the data directory path from parameters
         input_features = parameters[0].valueAsText
 
-        self.logger.debug(f"Input features: {input_features}")
+        logger.debug(f"Input features: {input_features}")
 
         # add boolean access restrictions field
         overture_to_arcgis.utils.add_boolean_access_restrictions_fields(input_features)
