@@ -2,10 +2,13 @@ from importlib.util import find_spec
 import json
 import logging
 from pathlib import Path
+import shutil
 from typing import Union
 
 import arcpy
 import pandas as pd
+
+from overture_to_arcgis.utils.__main__ import convert_complex_columns_to_strings
 
 from .utils import (
     get_all_overture_types,
@@ -15,11 +18,12 @@ from .utils import (
     get_record_batches,
     table_to_features,
     table_to_spatially_enabled_dataframe,
+    get_geometry_column,
 )
 
 # configure module logging
 logger = get_logger(
-    logger_name="arcgis_overture", level="DEBUG", add_stream_handler=False
+    logger_name="overture_to_arcgis", level="DEBUG", add_stream_handler=False
 )
 
 
@@ -59,25 +63,48 @@ def get_spatially_enabled_dataframe(
     # get the record batch generator
     batches = get_record_batches(overture_type, bbox, connect_timeout, request_timeout)
 
-    # combine the record batches into a single arrow table
-    for idx, batch in enumerate(batches):
-        if idx == 0:
-            tbl = batch
-        else:
-            tbl = tbl.append(batch)
+    # initialize the dataframe and geometry column name
+    df = None
 
-    # log the number of rows fetched
-    tbl_cnt = tbl.num_rows
-    logger.debug(
-        f"Fetched {tbl_cnt} rows of '{overture_type}' data from Overture Maps."
-    )
-    if tbl_cnt == 0:
+    # iterate the batches
+    for idx, batch in enumerate(batches):
+
+        # if the batch has any rows and the dataframe is not yet initialized
+        if batch.num_rows > 0 and df is None:
+
+            # create the initial dataframe
+            df = table_to_spatially_enabled_dataframe(batch)
+
+            # save the geometry column name
+            geom_col = df.spatial.name
+
+        elif batch.num_rows > 0:
+            # get the batch as a spatially enabled dataframe
+            tmb_df = table_to_spatially_enabled_dataframe(batch)
+
+            # append the batch dataframe to the main dataframe
+            df = pd.concat([df, tmb_df], ignore_index=True)
+
+    # if data found, perform post processing
+    if isinstance(df, pd.DataFrame):
+        # set the geometry column using the ArcGIS GeoAccessor to get a Spatially Enabled DataFrame
+        df.spatial.set_geometry(geom_col, sr=4326, inplace=True)
+
+        # reset the index so it makes sense after concatenation
+        df.reset_index(drop=True, inplace=True)
+
+        # log the number of rows fetched
+        df_cnt = df.shape[0]
+        logger.debug(
+            f"Fetched {df_cnt} rows of '{overture_type}' data from Overture Maps."
+        )
+
+    # if no data found, log a warning and create an empty dataframe to return
+    else:
+        df = pd.DataFrame()
         logger.warning(
             f"No '{overture_type}' data found for the specified bounding box: {bbox}"
         )
-
-    # convert the arrow table to a spatially enabled pandas DataFrame
-    df = table_to_spatially_enabled_dataframe(tbl)
 
     return df
 
@@ -150,5 +177,8 @@ def get_features(
         arcpy.management.Merge(fc_list, str(output_feature_class))
     else:
         logger.warning("No data found for the specified bounding box. No output feature class created.")
+
+    # cleanup temporary data - remove temporary geodatabase using arcpy to avoid any locks
+    arcpy.management.Delete(str(tmp_gdb))
 
     return output_feature_class

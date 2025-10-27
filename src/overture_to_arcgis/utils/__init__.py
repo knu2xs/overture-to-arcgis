@@ -5,6 +5,7 @@ from .__main__ import (
     get_temp_gdb,
     get_record_batches,
     get_release_list,
+    get_geometry_column,
     has_h3,
     table_to_features,
     table_to_spatially_enabled_dataframe,
@@ -12,20 +13,19 @@ from .__main__ import (
 )
 from ._arcgis import (
     add_alternate_category_field,
-    add_h3_indices,
-    add_oneway_field,
+    add_boolean_access_restrictions_fields,
     add_overture_taxonomy_fields,
     add_primary_category_field,
-    add_primary_name, 
-    add_trail_field, 
+    add_primary_name,
+    add_trail_field,
     get_layers_for_unique_values,
-    add_website_field,
+    add_website_field, add_h3_indices,
 )
 
 __all__ = [
     "add_alternate_category_field",
+    "add_boolean_access_restrictions_fields",
     "add_h3_indices",
-    "add_oneway_field",
     "add_overture_taxonomy_fields",
     "add_primary_category_field",
     "add_primary_name",
@@ -34,6 +34,7 @@ __all__ = [
     "get_all_overture_types",
     "get_logger",
     "get_current_release",
+    "get_geometry_column",
     "get_layers_for_unique_values",
     "get_temp_gdb",
     "get_record_batches",

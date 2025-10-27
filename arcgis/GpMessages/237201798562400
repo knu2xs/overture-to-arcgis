@@ -1,0 +1,4 @@
+﻿<?xml version="1.0" encoding="utf-8"?><messages><msg code="0" type="2">Start Time: Monday, 27 October, 2025 09:02:41</msg><msg code="1" type="100">﻿Traceback (most recent call last):
+﻿  File "&lt;string&gt;", line 569, in execute
+﻿AttributeError: module 'overture_to_arcgis.utils' has no attribute 'add_boolean_access_restrictions_field'
+</msg><msg code="-2147467259" type="100">Failed to execute (AddBooleanAccessRestrictionsFields).</msg><msg code="0" type="3">Failed at Monday, 27 October, 2025 09:02:41 (Elapsed Time: 0.16 seconds)</msg></messages>

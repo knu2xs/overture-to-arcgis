@@ -36,6 +36,9 @@ if importlib.util.find_spec("overture_to_arcgis") is None:
 # include custom code
 import overture_to_arcgis
 
+# add logger for the module
+logger = overture_to_arcgis.utils.get_logger("INFO", logger_name="overture_to_arcgis", add_arcpy_handler=True)
+
 
 class Toolbox:
     def __init__(self):
@@ -48,11 +51,11 @@ class Toolbox:
             AddLayersForUniqueValues,
             AddPrimaryNameField,
             AddTrailField,
-            AddOnewayField, 
             AddPrimaryCategoryField,
             AddAlternateCategoryField,
             AddWebsiteField,
             AddOvertureTaxonomyCodeFields,
+            AddBooleanAccessRestrictionsFields
         ]
 
         # add H3 index field tool only if h3 is available
@@ -66,8 +69,6 @@ class GetOvertureFeatures:
         self.description = (
             "Get Overture data as features."
         )
-        # configure logging so messages bubble up through ArcPy
-        self.logger = overture_to_arcgis.utils.get_logger("INFO", logger_name=f"overture_to_arcgis.{self.__class__.__name__}", add_arcpy_handler=True)
 
     def getParameterInfo(self):
 
@@ -105,18 +106,7 @@ class GetOvertureFeatures:
         overture_type.filter.list = overture_to_arcgis.utils.get_all_overture_types()
         overture_type.value = "segment"
 
-        # add parameter to optionally add primary name field
-        add_primary_name_field = arcpy.Parameter(
-            displayName="Add Primary Name Field",
-            name="add_primary_name_field",
-            datatype="GPBoolean",
-            category="Parsing",
-            parameterType="Optional",
-            direction="Input"
-        )
-        add_primary_name_field.value = True
-
-        params = [extent, out_fc, overture_type, add_primary_name_field]
+        params = [extent, out_fc, overture_type]
 
         return params
 
@@ -158,10 +148,6 @@ class GetOvertureFeatures:
         # delete features not intersecting the input extent features
         arcpy.management.DeleteFeatures(ovm_lyr)
 
-        # add primary name field if specified
-        if parameters[3].valueAsText.lower() == "true":
-            overture_to_arcgis.utils.add_primary_name(str(out_fc))
-
         return out_fc
 
 
@@ -173,9 +159,6 @@ class AddLayersForUniqueValues:
             "Add a layer for each unique value in a specified field."
         )
         self.category = "Utilities"
-
-        # configure logging so messages bubble up through ArcPy
-        self.logger = overture_to_arcgis.utils.get_logger("INFO", logger_name=f"overture_to_arcgis.{self.__class__.__name__}", add_arcpy_handler=True)
 
     def getParameterInfo(self):
 
@@ -243,10 +226,7 @@ class AddPrimaryNameField:
         self.description = (
             "Add a 'primary_name' field to a feature class if it does not already exist."
         )
-        self.category = "Parsing"
-
-        # configure logging so messages bubble up through ArcPy
-        self.logger = overture_to_arcgis.utils.get_logger("INFO", logger_name=f"overture_to_arcgis.{self.__class__.__name__}", add_arcpy_handler=True)
+        self.category = "Add Parsed Fields"
 
     def getParameterInfo(self):
 
@@ -281,10 +261,7 @@ class AddTrailField:
         self.description = (
             "Add a 'trail' field to a feature class if it does not already exist."
         )
-        self.category = "Parsing"
-
-        # configure logging so messages bubble up through ArcPy
-        self.logger = overture_to_arcgis.utils.get_logger("INFO", logger_name=f"overture_to_arcgis.{self.__class__.__name__}", add_arcpy_handler=True)
+        self.category = "Add Parsed Fields"
 
     def getParameterInfo(self):
 
@@ -312,43 +289,6 @@ class AddTrailField:
 
         return
     
-class AddOnewayField:
-    """Tool to add a 'oneway' field to a feature class."""
-    def __init__(self):
-        self.label = "Add One-Way Field (Segments)"
-        self.description = (
-            "Add a 'oneway' field to a feature class if it does not already exist."
-        )
-        self.category = "Parsing"
-
-        # configure logging so messages bubble up through ArcPy
-        self.logger = overture_to_arcgis.utils.get_logger("INFO", logger_name=f"overture_to_arcgis.{self.__class__.__name__}", add_arcpy_handler=True)
-
-    def getParameterInfo(self):
-
-        # create a parameter to set the input feature layer
-        input_features = arcpy.Parameter(
-            displayName="Input Features",
-            name="input_features",
-            datatype="GPFeatureLayer",
-            parameterType="Required",
-            direction="Input"
-        )
-
-        params = [input_features]
-
-        return params
-
-    def execute(self, parameters, messages):
-        """The source code of the tool."""
-
-        # retrieve the data directory path from parameters
-        input_features = parameters[0].valueAsText
-
-        # add oneway field
-        overture_to_arcgis.utils.add_oneway_field(input_features)
-
-        return
     
 class AddPrimaryCategoryField:
     """Tool to add a 'primary_category' field to a feature class."""
@@ -357,10 +297,7 @@ class AddPrimaryCategoryField:
         self.description = (
             "Add a 'primary_category' field to a feature class if it does not already exist."
         )
-        self.category = "Parsing"
-
-        # configure logging so messages bubble up through ArcPy
-        self.logger = overture_to_arcgis.utils.get_logger("INFO", logger_name=f"overture_to_arcgis.{self.__class__.__name__}", add_arcpy_handler=True)
+        self.category = "Add Parsed Fields"
 
     def getParameterInfo(self):
 
@@ -396,10 +333,7 @@ class AddAlternateCategoryField:
         self.description = (
             "Add a 'alternate_category' field to a feature class if it does not already exist."
         )
-        self.category = "Parsing"
-
-        # configure logging so messages bubble up through ArcPy
-        self.logger = overture_to_arcgis.utils.get_logger("INFO", logger_name=f"overture_to_arcgis.{self.__class__.__name__}", add_arcpy_handler=True)
+        self.category = "Add Parsed Fields"
 
     def getParameterInfo(self):
 
@@ -427,6 +361,7 @@ class AddAlternateCategoryField:
 
         return
 
+
 class AddWebsiteField:
     """Tool to add a 'website' field to a feature class."""
     def __init__(self):
@@ -434,10 +369,7 @@ class AddWebsiteField:
         self.description = (
             "Add a 'website' field to a feature class if it does not already exist."
         )
-        self.category = "Parsing"
-
-        # configure logging so messages bubble up through ArcPy
-        self.logger = overture_to_arcgis.utils.get_logger("INFO", logger_name=f"overture_to_arcgis.{self.__class__.__name__}", add_arcpy_handler=True)
+        self.category = "Add Parsed Fields"
 
     def getParameterInfo(self):
 
@@ -465,6 +397,7 @@ class AddWebsiteField:
 
         return
 
+
 class AddOvertureTaxonomyCodeFields:
     """Tool to add Overture taxonomy code fields to a feature class."""
     def __init__(self):
@@ -472,10 +405,7 @@ class AddOvertureTaxonomyCodeFields:
         self.description = (
             "Add Overture taxonomy code fields to a feature class based on the primary category."
         )
-        self.category = "Parsing"
-
-        # configure logging so messages bubble up through ArcPy
-        self.logger = overture_to_arcgis.utils.get_logger("INFO", logger_name=f"overture_to_arcgis.{self.__class__.__name__}", add_arcpy_handler=True)
+        self.category = "Add Parsed Fields"
 
     def getParameterInfo(self):
 
@@ -529,6 +459,7 @@ class AddOvertureTaxonomyCodeFields:
 
         return
     
+
 class AddH3IndexField:
     """Tool to add H3 index field to a feature class."""
     def __init__(self):
@@ -537,9 +468,6 @@ class AddH3IndexField:
             "Add an H3 index field to a feature class based on geometry."
         )
         self.category = "Utilities"
-
-        # configure logging so messages bubble up through ArcPy
-        self.logger = overture_to_arcgis.utils.get_logger("INFO", logger_name=f"overture_to_arcgis.{self.__class__.__name__}", add_arcpy_handler=True)
 
     def getParameterInfo(self):
 
@@ -577,5 +505,43 @@ class AddH3IndexField:
 
         # add H3 index field
         overture_to_arcgis.utils.add_h3_indices(input_features, resolution=h3_resolution)
+
+        return
+    
+
+class AddBooleanAccessRestrictionsFields:
+    """Tool to add boolean access restrictions fields to a feature class."""
+    def __init__(self):
+        self.label = "Add Boolean Access Restriction Fields (Segments)"
+        self.description = (
+            "Add a boolean access restrictions fields to a feature class based on access_restrictions."
+        )
+        self.category = "Add Parsed Fields"
+
+    def getParameterInfo(self):
+
+        # create a parameter to set the input feature layer
+        input_features = arcpy.Parameter(
+            displayName="Input Features",
+            name="input_features",
+            datatype="GPFeatureLayer",
+            parameterType="Required",
+            direction="Input"
+        )
+
+        params = [input_features]
+
+        return params
+
+    def execute(self, parameters, messages):
+        """The source code of the tool."""
+
+        # retrieve the data directory path from parameters
+        input_features = parameters[0].valueAsText
+
+        self.logger.debug(f"Input features: {input_features}")
+
+        # add boolean access restrictions field
+        overture_to_arcgis.utils.add_boolean_access_restrictions_fields(input_features)
 
         return

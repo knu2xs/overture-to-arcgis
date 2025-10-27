@@ -17,7 +17,7 @@ import pyarrow.fs as fs
 from ._logging import get_logger
 
 # create a logger for this module
-logger = get_logger(logger_name=__name__, level="DEBUG", add_stream_handler=False)
+logger = get_logger(logger_name="overture_to_arcgis.utils.__main__", level="DEBUG", add_stream_handler=False)
 
 # provide variable indicating if arcpy is available
 has_arcpy: bool = find_spec("arcpy") is not None
@@ -35,6 +35,7 @@ has_h3: bool = find_spec("h3") is not None
 def slugify(value: str) -> str:
     """Convert a string to a slug format."""
     value = value.lower()
+    value = value.replace('.', "_")  # helps with decimals for maximum heights
     value = value.replace(" ", "_")
     value = "".join(char for char in value if char.isalnum() or char == "_")
     return value
@@ -313,6 +314,7 @@ def get_dataset_path(overture_type: str, release: Optional[str] = None) -> str:
 
 def convert_complex_columns_to_strings(table: pa.Table) -> pa.Table:
     """Convert complex data type columns in a PyArrow table to strings."""
+    import json
     # list to hold new column values for converting back
     new_columns = []
 
@@ -327,20 +329,75 @@ def convert_complex_columns_to_strings(table: pa.Table) -> pa.Table:
             or pa.types.is_list(field.type)
             or pa.types.is_map(field.type)
         ):
-            # convert complex column to string
-            string_array = pa.array([str(value.as_py()) for value in column])
-
-            # add the column to the list
+            # convert complex column to JSON string
+            string_array = pa.array([json.dumps(value.as_py()) for value in column])
             new_columns.append(string_array)
-
         # if not complex, leave alone
         else:
             new_columns.append(column)
 
     # create a new PyArrow Table with the list of columns
     new_table = pa.table(new_columns, names=table.schema.names)
-
     return new_table
+
+
+def get_geometry_column(table: Union[pa.Table, pa.RecordBatch]) -> str:
+    """
+    Get the name of the geometry column from the PyArrow Table or RecordBatch metadata.
+
+    Args:
+        table: PyArrow Table or RecordBatch with GeoArrow metadata.
+
+    Returns:
+        Name of the geometry column.
+    """
+    geo_meta = table.schema.metadata.get(b"geo")
+    if geo_meta is None:
+        raise ValueError("No geometry metadata found in the Overture Maps data.")
+    geo_meta = json.loads(geo_meta.decode("utf-8"))
+    geom_col = geo_meta.get("primary_column")
+    if geom_col is None or geom_col not in table.column_names:
+        raise ValueError(
+            "No valid primary_geometry column defined in the Overture Maps metadata."
+        )
+    return geom_col
+
+
+def convert_wkb_column_to_arcgis_geometry(wkb_series: pd.Series) -> pd.Series:
+    """
+    Convert a pandas Series of WKB values to ArcGIS Geometry objects.
+
+    Args:
+        wkb_series: pandas Series containing WKB values.
+
+    Returns:
+        pandas Series of ArcGIS Geometry objects.
+    """
+    def wkb_to_geometry(wkb_value):
+
+        # if null value, return None
+        if pd.isnull(wkb_value):
+            ret_geom = None
+
+        # otherwise, try to convert
+        try:
+            # convert WKB to geojson using geomet
+            geojson = wkb.loads(wkb_value)
+
+            # convert geojson to ArcGIS Geometry
+            ret_geom = Geometry(geojson)
+        
+        # if any issues, log warning and return None
+        except Exception as e:
+            logger.warning(f"Failed to convert WKB to Geometry: {e}")
+            ret_geom = None
+
+        return ret_geom
+
+    # use the apply method to convert each WKB value to Geometry
+    geom_series = wkb_series.apply(wkb_to_geometry)
+
+    return geom_series
 
 
 def table_to_spatially_enabled_dataframe(
@@ -361,22 +418,14 @@ def table_to_spatially_enabled_dataframe(
     # convert table to a pandas DataFrame
     df = smpl_table.to_pandas()
 
-    # get the geometry column from the metadata
-    geo_meta = table.schema.metadata.get(b"geo")
-    if geo_meta is None:
-        raise ValueError("No geometry metadata found in the Overture Maps data.")
-    geo_meta = json.loads(geo_meta.decode("utf-8"))
-    geom_col = geo_meta.get("primary_column")
-    if geom_col is None or geom_col not in df.columns:
-        raise ValueError(
-            "No valid primary_geometry column defined in the Overture Maps metadata."
-        )
+    # get the geometry column from the metadata using the helper function
+    geom_col = get_geometry_column(table)
 
     # convert the geometry column from WKB to arcgis Geometry objects
-    df[geom_col] = df[geom_col].apply(lambda itm: Geometry(esri.dumps(wkb.loads(itm))))
+    df[geom_col] = convert_wkb_column_to_arcgis_geometry(df[geom_col])
 
     # set the geometry column using the ArcGIS GeoAccessor to get a Spatially Enabled DataFrame
-    df.spatial.set_geometry(geom_col, sr=4326)
+    df.spatial.set_geometry(geom_col, sr=4326, inplace=True)
 
     return df
 

@@ -1,0 +1,6 @@
+﻿<?xml version="1.0" encoding="utf-8"?><messages><msg code="0" type="2">Start Time: Monday, 27 October, 2025 14:00:00</msg><msg code="0" type="0">2025-10-27 14:00:01,333 | overture_to_arcgis.AddBooleanAccessRestrictionsFields | DEBUG | Input features: overture_segment_raw</msg><msg code="1" type="100">﻿Traceback (most recent call last):
+﻿  File "&lt;string&gt;", line 571, in execute
+﻿  File "D:\projects\overture-to-arcgis\src\overture_to_arcgis\utils\_arcgis.py", line 619, in add_boolean_access_restrictions_fields
+﻿    for row in cursor:
+﻿RuntimeError: Cannot acquire a lock.
+</msg><msg code="-2147467259" type="100">Failed to execute (AddBooleanAccessRestrictionsFields).</msg><msg code="0" type="3">Failed at Monday, 27 October, 2025 14:00:04 (Elapsed Time: 3.69 seconds)</msg></messages>

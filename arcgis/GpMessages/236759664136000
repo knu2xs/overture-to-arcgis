@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?><messages><msg code="0" type="2">Start Time: Monday, 27 October, 2025 08:55:19</msg><msg code="0" type="0">2025-10-27 08:55:19,803 | overture_to_arcgis.GetOvertureFeatures | INFO | Retrieving 'segment' features for extent: (-123.07692738665492, 46.717833820403314, -122.47033626714472, 47.191618353121044).</msg><msg code="1" type="100">﻿Traceback (most recent call last):
+﻿  File "&lt;string&gt;", line 138, in execute
+﻿  File "D:\projects\overture-to-arcgis\src\overture_to_arcgis\__main__.py", line 156, in get_features
+﻿    arcpy.management.Delete(tmp_gdb)
+﻿  File "C:\Program Files\ArcGIS\Pro\Resources\ArcPy\arcpy\management.py", line 11324, in Delete
+﻿    raise e
+﻿  File "C:\Program Files\ArcGIS\Pro\Resources\ArcPy\arcpy\management.py", line 11321, in Delete
+﻿    retval = convertArcObjectToPythonObject(gp.Delete_management(*gp_fixargs((in_data, data_type), True)))
+﻿                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+﻿  File "C:\Program Files\ArcGIS\Pro\Resources\ArcPy\arcpy\geoprocessing\_base.py", line 533, in &lt;lambda&gt;
+﻿    return lambda *args: val(*gp_fixargs(args, True))
+﻿                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+﻿RuntimeError: Object: Error in executing tool
+</msg><msg code="-2147467259" type="100">Failed to execute (GetOvertureFeatures).</msg><msg code="0" type="3">Failed at Monday, 27 October, 2025 08:56:07 (Elapsed Time: 47.61 seconds)</msg></messages>

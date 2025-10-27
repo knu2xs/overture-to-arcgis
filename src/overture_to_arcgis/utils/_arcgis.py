@@ -5,8 +5,8 @@ from typing import Optional, Union
 
 import arcpy
 
-from overture_to_arcgis.utils.__main__ import get_overture_taxonomy_category_field_max_lengths, get_overture_taxonomy_dataframe
 
+from overture_to_arcgis.utils.__main__ import get_overture_taxonomy_category_field_max_lengths, get_overture_taxonomy_dataframe
 from .__main__ import slugify
 from ._logging import get_logger
 
@@ -150,66 +150,6 @@ def add_trail_field(features: Union[arcpy._mp.Layer, str, Path]) -> None:
             if class_value in trail_classes:
                 # set the trail field in the row
                 row[1] = 1
-
-                # update the row
-                update_cursor.updateRow(row)
-
-    return
-
-
-def add_oneway_field(features: Union[arcpy._mp.Layer, str, Path]) -> None:
-    """
-    Add a 'one_way' boolean field to the input features if it does not already exist. These features
-    are those with an attribute 'oneway' set to 'yes'.
-
-    Args:
-        features: The input feature layer or feature class.
-    """
-    # check if 'one_way' field exists
-    field_names = [f.name for f in arcpy.ListFields(features)]
-    if "one_way" not in field_names:
-        # add 'one_way' field
-        arcpy.management.AddField(
-            in_table=features,
-            field_name="one_way",
-            field_type="SHORT",
-        )
-
-        logger.debug("Added 'one_way' field to features.")
-
-    # calculate 'one_way' from 'access_restrictions' field
-    with arcpy.da.UpdateCursor(features, ["access_restrictions", "one_way"]) as update_cursor:
-        # iterate through the rows
-        for row in update_cursor:
-            # get the attributes value and extract one_way field
-            attributes_value = row[0]
-
-            # set the one_way field if attributes_value is valid
-            if (
-                attributes_value is not None
-                and isinstance(attributes_value, str)
-                and len(attributes_value) > 0
-                and not attributes_value.strip() == "None"
-            ):
-                # parse the attributes value into a dictionary
-                attributes_lst = eval(attributes_value)
-
-                # default oneway value
-                oneway_value = 0
-
-                # if a denied access type is in any of the keys, evaluate it
-                for restriction_dict in attributes_lst:
-                    if restriction_dict.get("access_type") == "denied" and restriction_dict.get("when") is not None:
-                            
-                        # extract the heading from the when dictionary
-                        when_dict = restriction_dict.get("when")
-
-                        # if the heading is forward or backward, set oneway value
-                        if when_dict is not None and when_dict.get("heading") in ["forward", "backward"]:
-                            oneway_value = 1
-
-                # set the one_way field in the row
-                row[1] = oneway_value
 
                 # update the row
                 update_cursor.updateRow(row)
@@ -548,3 +488,145 @@ def add_h3_indices(
             update_cursor.updateRow(row)
 
     return
+
+
+def flatten_dict_to_bool_keys(dicts):
+    """
+    Takes a list of dictionaries and returns a flat dictionary with boolean values (1) for each populated value.
+    Handles nested dictionaries and values that are strings or lists of strings.
+
+    Example:
+        [{'access_type': 'denied', 'when': {'heading': 'backward', 'mode': ['bicycle']}}]
+        -> {'access_denied_when_heading_backward': 1, 'access_denied_when_mode_bicycle': 1}
+    """
+    # if the input is a string, attempt to parse it to a dict or list of dicts - using eval since input may not be strict JSON
+    if isinstance(dicts, str):
+        try:
+            parsed = json.loads(dicts)
+            dicts = parsed if isinstance(parsed, list) else [parsed]
+        except Exception as e:
+            logger.warning(f"Input string could not be parsed as JSON: {dicts}")
+
+    # initialize result dictionary
+    result = {}
+
+    for d in dicts:
+        if not isinstance(d, dict):
+            continue
+        # Start with the access_type value
+        access_type = d.get('access_type')
+        if access_type:
+            prefix = f"access_{access_type}"
+
+            # If 'when' exists, process its keys
+            when = d.get('when')
+            if isinstance(when, dict):
+                for k, v in when.items():
+                    if isinstance(v, list):
+                        for item in v:
+                            if item is not None:
+                                key = f"{prefix}_when_{k}_{item}"
+                                result[key] = 1
+                    elif v is not None:
+                        key = f"{prefix}_when_{k}_{v}"
+                        result[key] = 1
+            # If no 'when', just set the access_type key
+            else:
+                result[prefix] = 1
+        # If no access_type, flatten other keys as fallback (legacy)
+        else:
+            for k, v in d.items():
+                if isinstance(v, dict):
+                    for subk, subv in v.items():
+                        if isinstance(subv, list):
+                            for item in subv:
+                                if item is not None:
+                                    key = f"{k}_{subk}_{item}"
+                                    result[key] = 1
+                        elif subv is not None:
+                            key = f"{k}_{subk}_{subv}"
+                            result[key] = 1
+                elif isinstance(v, list):
+                    for item in v:
+                        if item is not None:
+                            key = f"{k}_{item}"
+                            result[key] = 1
+                elif v is not None:
+                    key = f"{k}_{v}"
+                    result[key] = 1
+    return result
+
+
+def get_boolean_access_restrictions(features: Union[str, Path, arcpy._mp.Layer], access_field: str = "access_restrictions") -> list[dict]:
+    """
+    Extract boolean access restrictions from the access_restrictions field of the input features.
+
+    Args:
+        features: The input feature layer or feature class.
+        access_field: The name of the access restrictions field.
+
+    Returns:
+        A list of dictionaries containing the boolean access restrictions.
+    """
+    if not arcpy.Exists(features):
+        raise ValueError("Input features do not exist.")
+
+    access_restrictions = []
+    with arcpy.da.SearchCursor(features, [access_field]) as cursor:
+        for row in cursor:
+            if row[0] is not None and isinstance(row[0], str):
+                access_rest_dict = eval(row[0])
+                if isinstance(access_rest_dict, list):
+                    access_restrictions.append(flatten_dict_to_bool_keys(row[0]))
+
+    return access_restrictions
+
+
+def add_boolean_access_restrictions_fields(features: Union[str, Path, arcpy._mp.Layer], access_field: str = "access_restrictions") -> None:
+    """
+    Add boolean access restriction fields to the input features based on the access_restrictions field.
+
+    Args:
+        features: The input feature layer or feature class.
+        access_field: The name of the access restrictions field.
+    """
+    # if features is a path, convert to string
+    if isinstance(features, Path):
+        features = str(features)
+
+    # ensure the features exist
+    if not arcpy.Exists(features):
+        raise ValueError("Input features do not exist.")
+
+    # first pass to collect all unique keys
+    unique_keys = set()
+    with arcpy.da.SearchCursor(features, [access_field]) as cursor:
+        for row in cursor:
+            if row[0] is not None:
+                bool_dict = flatten_dict_to_bool_keys(row[0])
+                unique_keys.update(bool_dict.keys())
+
+    # create a list of fields to add
+    add_fields = sorted([
+        [slugify(key), "SHORT"] for key in unique_keys
+    ])
+
+    # add fields to feature class
+    arcpy.management.AddFields(features, add_fields)
+
+    logger.info('Added boolean access restriction fields to features: ' + ', '.join([f[0] for f in add_fields]))
+
+    # second pass to populate the fields
+    field_names = [slugify(key) for key in unique_keys]
+
+    with arcpy.da.UpdateCursor(features, [access_field] + field_names) as cursor:
+        for row in cursor:
+            bool_dict = {}
+            if row[0] is not None:
+                bool_dict = flatten_dict_to_bool_keys(row[0])
+            for idx, key in enumerate(unique_keys):
+                row[idx + 1] = bool_dict.get(key, 0)
+            cursor.updateRow(row)
+
+    return
+
