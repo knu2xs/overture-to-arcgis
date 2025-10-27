@@ -1,3 +1,4 @@
+import gc
 from importlib.util import find_spec
 from pathlib import Path
 import json
@@ -85,6 +86,9 @@ def add_primary_name(features: Union[arcpy._mp.Layer, str, Path]) -> None:
 
         logger.debug("Added 'primary_name' field to features.")
 
+    # ensure schema lock is released by forcing garbage collection
+    gc.collect()
+
     # calculate 'primary_name' from 'name' field
     with arcpy.da.UpdateCursor(features, ["names", "primary_name"]) as update_cursor:
         # iterate through the rows
@@ -140,6 +144,9 @@ def add_trail_field(features: Union[arcpy._mp.Layer, str, Path]) -> None:
     # list of classes to search for
     trail_classes = ["track", "path", "footway", "trail", "cycleway"]
 
+    # ensure schema lock is released by forcing garbage collection
+    gc.collect()
+
     # calculate 'trail_field' from 'attributes' field
     with arcpy.da.UpdateCursor(features, ["class", "trail"]) as update_cursor:
         # iterate through the rows
@@ -178,6 +185,9 @@ def add_primary_category_field(features: Union[arcpy._mp.Layer, str, Path]) -> N
         )
 
         logger.debug("Added 'primary_category' field to features.")
+
+    # ensure schema lock is released by forcing garbage collection
+    gc.collect()
 
     # calculate 'primary_category' from 'categories' field
     with arcpy.da.UpdateCursor(features, ["categories", "primary_category"]) as update_cursor:
@@ -233,6 +243,9 @@ def add_alternate_category_field(features: Union[arcpy._mp.Layer, str, Path]) ->
         )
 
         logger.debug("Added 'alternate_category' field to features.")
+
+    # ensure schema lock is released by forcing garbage collection
+    gc.collect()
 
     # calculate 'alternate_category' from 'categories' field
     with arcpy.da.UpdateCursor(features, ["categories", "alternate_category"]) as update_cursor:
@@ -349,6 +362,9 @@ def add_overture_taxonomy_fields(features: Union[str, Path, arcpy._mp.Layer], si
 
         logger.info(f"Added field '{col}' with length {max_len} to features.")
 
+    # ensure schema lock is released by forcing garbage collection
+    gc.collect()
+
     # calculate the category code fields from the categories generator
     with arcpy.da.UpdateCursor(features, list(max_lengths.keys())) as update_cursor:
         # iterate through the rows and categories
@@ -398,6 +414,9 @@ def add_website_field(features: Union[arcpy._mp.Layer, str, Path]) -> None:
         )
 
         logger.debug("Added 'website' field to features.")
+
+    # ensure schema lock is released by forcing garbage collection
+    gc.collect()
 
     # calculate 'website' from 'websites' field
     with arcpy.da.UpdateCursor(features, ["websites", "website"]) as update_cursor:
@@ -475,6 +494,9 @@ def add_h3_indices(
         )
 
         logger.debug(f"Added '{h3_field}' field to features.")
+
+    # ensure schema lock is released by forcing garbage collection
+    gc.collect()
 
     # calculate H3 indices from geometry
     with arcpy.da.UpdateCursor(features, ['SHAPE@XY', h3_field]) as update_cursor:
@@ -621,6 +643,9 @@ def add_boolean_access_restrictions_fields(features: Union[str, Path, arcpy._mp.
     arcpy.management.AddFields(features, add_fields)
 
     logger.info('Added boolean access restriction fields to features: ' + ', '.join([f[0] for f in add_fields]))
+
+    # ensure schema lock is released by forcing garbage collection
+    gc.collect()
 
     # second pass to populate the fields
     field_names = [slugify(key) for key in unique_keys]
