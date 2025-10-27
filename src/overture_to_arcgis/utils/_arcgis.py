@@ -92,12 +92,13 @@ def add_primary_name(features: Union[arcpy._mp.Layer, str, Path]) -> None:
             # get the name value and extract primary name
             name_str = row[0]
 
-            # set the primary name if name_value is valid
+            # set the primary name if name_value is populated
             if (
                 name_str is not None
                 and isinstance(name_str, str)
                 and len(name_str) > 0
                 and not name_str.strip() == "None"
+                and not name_str.strip().lower() == 'null'
             ):
                 # parse the name value into a dictionary
                 name_dict = json.loads(name_str)
@@ -191,6 +192,7 @@ def add_primary_category_field(features: Union[arcpy._mp.Layer, str, Path]) -> N
                 and isinstance(categories_value, str)
                 and len(categories_value) > 0
                 and not categories_value.strip() == "None"
+                and not categories_value.strip().lower() == 'null'
             ):
                 # parse the categories value into a dictionary
                 categories_dict = json.loads(categories_value)
@@ -245,6 +247,7 @@ def add_alternate_category_field(features: Union[arcpy._mp.Layer, str, Path]) ->
                 and isinstance(categories_value, str)
                 and len(categories_value) > 0
                 and not categories_value.strip() == "None"
+                and not categories_value.strip().lower() == 'null'
             ):
                 # parse the categories value into a dictionary
                 categories_dict = json.loads(categories_value)
@@ -357,6 +360,7 @@ def add_overture_taxonomy_fields(features: Union[str, Path, arcpy._mp.Layer], si
                 and isinstance(category, str)
                 and len(category) > 0
                 and not category.strip() == "None"
+                and not category.strip().lower() == 'null'
             ):
                 # get the taxonomy row for the category
                 taxonomy_row = taxonomy_df.loc[category]
@@ -408,6 +412,8 @@ def add_website_field(features: Union[arcpy._mp.Layer, str, Path]) -> None:
                 and isinstance(website_value, str)
                 and len(website_value) > 0
                 and not website_value.strip() == "None"
+                and not website_value.strip().lower() == 'null'
+
             ):
                 # parse the website value into a list
                 website_lst = json.loads(website_value)
