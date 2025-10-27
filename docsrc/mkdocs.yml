@@ -1,4 +1,4 @@
-site_name: Overture to ArcGIS 0.3.2
+site_name: Overture to ArcGIS 0.3.3.dev0
 
 docs_dir: mkdocs
 site_dir: ../docs
