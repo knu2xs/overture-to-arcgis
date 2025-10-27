@@ -100,7 +100,7 @@ def add_primary_name(features: Union[arcpy._mp.Layer, str, Path]) -> None:
                 and not name_str.strip() == "None"
             ):
                 # parse the name value into a dictionary
-                name_dict = eval(name_str)
+                name_dict = json.loads(name_str)
 
                 # extract the primary name
                 primary_name = name_dict.get("primary")
@@ -193,7 +193,7 @@ def add_primary_category_field(features: Union[arcpy._mp.Layer, str, Path]) -> N
                 and not categories_value.strip() == "None"
             ):
                 # parse the categories value into a dictionary
-                categories_dict = eval(categories_value)
+                categories_dict = json.loads(categories_value)
 
                 # extract the primary category
                 primary_category = categories_dict.get("primary")
@@ -247,7 +247,7 @@ def add_alternate_category_field(features: Union[arcpy._mp.Layer, str, Path]) ->
                 and not categories_value.strip() == "None"
             ):
                 # parse the categories value into a dictionary
-                categories_dict = eval(categories_value)
+                categories_dict = json.loads(categories_value)
 
                 # extract the alternate category
                 alternate_category = categories_dict.get("alternate")
@@ -294,7 +294,7 @@ def add_overture_taxonomy_fields(features: Union[str, Path, arcpy._mp.Layer], si
         
         # create a generator to extract categories from the 'categories' field
         categories_gen = (
-            eval(row[0]).get("primary")
+            json.loads(row[0]).get("primary")
             for row in arcpy.da.SearchCursor(features, ["categories"])
         )
 
@@ -410,7 +410,7 @@ def add_website_field(features: Union[arcpy._mp.Layer, str, Path]) -> None:
                 and not website_value.strip() == "None"
             ):
                 # parse the website value into a list
-                website_lst = eval(website_value)
+                website_lst = json.loads(website_value)
 
                 # extract the first website from the list
                 if isinstance(website_lst, list) and len(website_lst) > 0:
