@@ -19,7 +19,10 @@ from ._arcgis import (
     add_primary_name,
     add_trail_field,
     get_layers_for_unique_values,
-    add_website_field, add_h3_indices,
+    add_website_field,
+    add_h3_indices,
+    remove_rail_features,
+    split_into_subclass_features,
 )
 
 __all__ = [
@@ -40,6 +43,8 @@ __all__ = [
     "get_record_batches",
     "get_release_list",
     "has_h3",
+    "remove_rail_features",
+    "split_into_subclass_features",
     "table_to_features",
     "table_to_spatially_enabled_dataframe",
     "validate_bounding_box",

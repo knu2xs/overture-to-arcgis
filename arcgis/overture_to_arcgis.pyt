@@ -55,7 +55,9 @@ class Toolbox:
             AddAlternateCategoryField,
             AddWebsiteField,
             AddOvertureTaxonomyCodeFields,
-            AddBooleanAccessRestrictionsFields
+            AddBooleanAccessRestrictionsFields,
+            AddSubclasses,
+            RemoveRailFeatures
         ]
 
         # add H3 index field tool only if h3 is available
@@ -418,18 +420,18 @@ class AddOvertureTaxonomyCodeFields:
             direction="Input"
         )
 
-        # create a parameter to set the primary category field
-        primary_category_field = arcpy.Parameter(
-            displayName="Primary Category Field",
-            name="primary_category_field",
+        # create a parameter to set the single category field
+        single_category_field = arcpy.Parameter(
+            displayName="Single Category Field",
+            name="single_category_field",
             datatype="GPString",
             parameterType="Required",
             direction="Input"
         )
-        primary_category_field.value = "primary_category"
-        primary_category_field.filter.type = "ValueList"
+        single_category_field.value = "primary_category"
+        single_category_field.filter.type = "ValueList"
 
-        params = [input_features, primary_category_field]
+        params = [input_features, single_category_field]
 
         return params
 
@@ -437,12 +439,12 @@ class AddOvertureTaxonomyCodeFields:
         """Update the tool's parameters."""
         # update the primary category field value
         input_features = parameters[0]
-        primary_category_field = parameters[1]
+        single_category_field = parameters[1]
         
         if input_features.value:
             try:
                 fields = [f.name for f in arcpy.ListFields(input_features.value) if f.type.upper() == 'TEXT']
-                primary_category_field.filter.list = fields
+                single_category_field.filter.list = fields
             except Exception as e:
                 arcpy.AddWarning(f"Could not list fields: {e}")
         return
@@ -452,10 +454,10 @@ class AddOvertureTaxonomyCodeFields:
 
         # retrieve the data directory path from parameters
         input_features = parameters[0].value
-        primary_category_field = parameters[1].valueAsText
+        single_category_field = parameters[1].valueAsText
 
         # add overture taxonomy code fields
-        overture_to_arcgis.utils.add_overture_taxonomy_fields(input_features, primary_category_field=primary_category_field)
+        overture_to_arcgis.utils.add_overture_taxonomy_fields(input_features, single_category_field)
 
         return
     
@@ -545,3 +547,69 @@ class AddBooleanAccessRestrictionsFields:
         overture_to_arcgis.utils.add_boolean_access_restrictions_fields(input_features)
 
         return
+
+
+class AddSubclasses:
+    """Tool to split features into subclass segments using subclass_rules."""
+    def __init__(self):
+        self.label = "Add Subclasses"
+        self.description = (
+            "Split features into subclass segments based on the 'subclass_rules' field. "
+            "Adds new features for each subclass segment and updates the 'subclass' field."
+        )
+        self.category = "Add Parsed Fields"
+
+    def getParameterInfo(self):
+        # Parameter for input feature layer
+        input_features = arcpy.Parameter(
+            displayName="Input Features",
+            name="input_features",
+            datatype="GPFeatureLayer",
+            parameterType="Required",
+            direction="Input"
+        )
+        params = [input_features]
+        return params
+
+    def execute(self, parameters, messages):
+        """Run the split_into_subclass_features function on the input features."""
+        input_features = parameters[0].valueAsText
+        overture_to_arcgis.utils.split_into_subclass_features(input_features)
+        return
+ 
+ 
+class RemoveRailFeatures:
+    """Remove rail features from a feature class."""
+    def __init__(self):
+        self.label = "Remove Rail Features"
+        self.description = (
+            "Remove features classified as 'rail' from a feature class."
+        )
+        self.category = "Utilities"
+
+    def getParameterInfo(self):
+
+        # create a parameter to set the input feature layer
+        input_features = arcpy.Parameter(
+            displayName="Input Features",
+            name="input_features",
+            datatype="GPFeatureLayer",
+            parameterType="Required",
+            direction="Input"
+        )
+
+        params = [input_features]
+
+        return params
+
+    def execute(self, parameters, messages):
+        """The source code of the tool."""
+
+        # retrieve the data directory path from parameters
+        input_features = parameters[0].valueAsText
+
+        # remove rail features
+        overture_to_arcgis.utils.remove_rail_features(input_features)
+
+        return
+    

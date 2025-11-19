@@ -1,0 +1,33 @@
+﻿<?xml version="1.0" encoding="utf-8"?><messages><msg code="0" type="2">Start Time: Tuesday, 28 October, 2025 16:08:42</msg><msg code="0" type="0">2025-10-28 16:08:47,024 | overture_to_arcgis.utils._arcgis | INFO | Added field 'primary_category_code' with length 55 to features.</msg><msg code="0" type="0">2025-10-28 16:08:47,271 | overture_to_arcgis.utils._arcgis | INFO | Added field 'primary_category_01' with length 37 to features.</msg><msg code="0" type="0">2025-10-28 16:08:47,523 | overture_to_arcgis.utils._arcgis | INFO | Added field 'primary_category_02' with length 41 to features.</msg><msg code="0" type="0">2025-10-28 16:08:47,769 | overture_to_arcgis.utils._arcgis | INFO | Added field 'primary_category_03' with length 52 to features.</msg><msg code="0" type="0">2025-10-28 16:08:48,019 | overture_to_arcgis.utils._arcgis | INFO | Added field 'primary_category_04' with length 55 to features.</msg><msg code="0" type="0">2025-10-28 16:08:48,276 | overture_to_arcgis.utils._arcgis | INFO | Added field 'primary_category_05' with length 38 to features.</msg><msg code="0" type="0">2025-10-28 16:08:48,524 | overture_to_arcgis.utils._arcgis | INFO | Added field 'primary_category_06' with length 26 to features.</msg><msg code="1" type="100">﻿Traceback (most recent call last):
+﻿  File "D:\projects\overture-to-arcgis\env\Lib\site-packages\pandas\core\indexes\base.py", line 3805, in get_loc
+﻿    return self._engine.get_loc(casted_key)
+﻿           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+﻿  File "index.pyx", line 167, in pandas._libs.index.IndexEngine.get_loc
+﻿  File "index.pyx", line 196, in pandas._libs.index.IndexEngine.get_loc
+﻿  File "hashtable_class_helper.pxi", line 7081, in pandas._libs.hashtable.PyObjectHashTable.get_item
+﻿  File "hashtable_class_helper.pxi", line 7089, in pandas._libs.hashtable.PyObjectHashTable.get_item
+﻿KeyError: 'primary_category_code'
+﻿
+﻿The above exception was the direct cause of the following exception:
+﻿
+﻿Traceback (most recent call last):
+﻿  File "&lt;string&gt;", line 434, in execute
+﻿  File "D:\projects\overture-to-arcgis\src\overture_to_arcgis\utils\_arcgis.py", line 458, in add_overture_taxonomy_fields
+﻿    row[idx] = taxonomy_row.loc[col]
+﻿               ~~~~~~~~~~~~~~~~^^^^^
+﻿  File "D:\projects\overture-to-arcgis\env\Lib\site-packages\pandas\core\indexing.py", line 1191, in __getitem__
+﻿    return self._getitem_axis(maybe_callable, axis=axis)
+﻿           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+﻿  File "D:\projects\overture-to-arcgis\env\Lib\site-packages\pandas\core\indexing.py", line 1431, in _getitem_axis
+﻿    return self._get_label(key, axis=axis)
+﻿           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+﻿  File "D:\projects\overture-to-arcgis\env\Lib\site-packages\pandas\core\indexing.py", line 1381, in _get_label
+﻿    return self.obj.xs(label, axis=axis)
+﻿           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+﻿  File "D:\projects\overture-to-arcgis\env\Lib\site-packages\pandas\core\generic.py", line 4301, in xs
+﻿    loc = index.get_loc(key)
+﻿          ^^^^^^^^^^^^^^^^^^
+﻿  File "D:\projects\overture-to-arcgis\env\Lib\site-packages\pandas\core\indexes\base.py", line 3812, in get_loc
+﻿    raise KeyError(key) from err
+﻿KeyError: 'primary_category_code'
+</msg><msg code="-2147467259" type="100">Failed to execute (AddOvertureTaxonomyCodeFields).</msg><msg code="0" type="3">Failed at Tuesday, 28 October, 2025 16:08:48 (Elapsed Time: 6.64 seconds)</msg></messages>

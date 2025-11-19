@@ -17,7 +17,11 @@ import pyarrow.fs as fs
 from ._logging import get_logger
 
 # create a logger for this module
-logger = get_logger(logger_name="overture_to_arcgis.utils.__main__", level="DEBUG", add_stream_handler=False)
+logger = get_logger(
+    logger_name="overture_to_arcgis.utils.__main__",
+    level="DEBUG",
+    add_stream_handler=False,
+)
 
 # provide variable indicating if arcpy is available
 has_arcpy: bool = find_spec("arcpy") is not None
@@ -35,7 +39,7 @@ has_h3: bool = find_spec("h3") is not None
 def slugify(value: str) -> str:
     """Convert a string to a slug format."""
     value = value.lower()
-    value = value.replace('.', "_")  # helps with decimals for maximum heights
+    value = value.replace(".", "_")  # helps with decimals for maximum heights
     value = value.replace(" ", "_")
     value = "".join(char for char in value if char.isalnum() or char == "_")
     return value
@@ -315,6 +319,7 @@ def get_dataset_path(overture_type: str, release: Optional[str] = None) -> str:
 def convert_complex_columns_to_strings(table: pa.Table) -> pa.Table:
     """Convert complex data type columns in a PyArrow table to strings."""
     import json
+
     # list to hold new column values for converting back
     new_columns = []
 
@@ -323,17 +328,28 @@ def convert_complex_columns_to_strings(table: pa.Table) -> pa.Table:
         # get the field
         field = table.schema.field(table.column_names[table.columns.index(column)])
 
-        # if a struct, list or map (complex data types)
+        # Convert complex columns (struct, list, map) to JSON strings, leave others unchanged
         if (
             pa.types.is_struct(field.type)
             or pa.types.is_list(field.type)
             or pa.types.is_map(field.type)
         ):
-            # convert complex column to JSON string
-            string_array = pa.array([json.dumps(value.as_py()) for value in column])
+            # For map types, convert to dict before dumping to JSON; for others, use as_py() directly
+            string_array = pa.array(
+                [
+                    json.dumps(
+                        dict(value.as_py())
+                        if pa.types.is_map(field.type)
+                        else value.as_py()
+                    )
+                    if value.is_valid
+                    else None
+                    for value in column
+                ]
+            )
             new_columns.append(string_array)
-        # if not complex, leave alone
         else:
+            # For non-complex types, keep the column as is
             new_columns.append(column)
 
     # create a new PyArrow Table with the list of columns
@@ -373,8 +389,8 @@ def convert_wkb_column_to_arcgis_geometry(wkb_series: pd.Series) -> pd.Series:
     Returns:
         pandas Series of ArcGIS Geometry objects.
     """
-    def wkb_to_geometry(wkb_value):
 
+    def wkb_to_geometry(wkb_value):
         # if null value, return None
         if pd.isnull(wkb_value):
             ret_geom = None
@@ -386,7 +402,7 @@ def convert_wkb_column_to_arcgis_geometry(wkb_series: pd.Series) -> pd.Series:
 
             # convert geojson to ArcGIS Geometry
             ret_geom = Geometry(geojson)
-        
+
         # if any issues, log warning and return None
         except Exception as e:
             logger.warning(f"Failed to convert WKB to Geometry: {e}")
@@ -538,7 +554,9 @@ def get_record_batches(
         yield batch
 
 
-def get_category_in_taxonomy(taxonomy_df: pd.DataFrame, category_code: str, taxonomy_index: int) -> str:
+def get_category_in_taxonomy(
+    taxonomy_df: pd.DataFrame, category_code: str, taxonomy_index: int
+) -> str:
     """
     Get the taxonomy code at the specified index for a given category code.
 
@@ -546,21 +564,24 @@ def get_category_in_taxonomy(taxonomy_df: pd.DataFrame, category_code: str, taxo
         taxonomy_df: DataFrame containing the taxonomy data.
         category_code: The category code to look up.
         taxonomy_index: The index in the taxonomy list to retrieve.
-    
+
     Returns:
         The taxonomy code at the specified index, or None if not found.
     """
     # get the value from the dataframe
-    taxonomy_res = taxonomy_df.loc[taxonomy_df['category_code'] == category_code, 'overture_taxonomy']
+    taxonomy_res = taxonomy_df.loc[
+        taxonomy_df["category_code"] == category_code, "overture_taxonomy"
+    ]
 
     # if something to work with
     if len(taxonomy_res) > 0:
-
         # get the list out of the result
         taxonomy_lst = taxonomy_res.iat[0]
 
         # pull out the code from the taxonomy at the index
-        taxonomy_code = taxonomy_lst[taxonomy_index] if taxonomy_index < len(taxonomy_lst) else None
+        taxonomy_code = (
+            taxonomy_lst[taxonomy_index] if taxonomy_index < len(taxonomy_lst) else None
+        )
 
     else:
         taxonomy_code = None
@@ -577,36 +598,43 @@ def get_overture_taxonomy_dataframe():
     """
     # Use the raw GitHub URL for the CSV file
     url = "https://raw.githubusercontent.com/OvertureMaps/schema/main/docs/schema/concepts/by-theme/places/overture_categories.csv"
-    
+
     # Read the CSV using semicolon as delimiter
-    df = pd.read_csv(url, sep=';', header=0, dtype='string')
-    
+    df = pd.read_csv(url, sep=";", header=0, dtype="string")
+
     # format the column names
-    df.columns = [col.strip().lower().replace(' ', '_') for col in df.columns]
-    
+    df.columns = [col.strip().lower().replace(" ", "_") for col in df.columns]
+
     # Convert the 'Overture Taxonomy' column from string to actual list of strings
-    df['overture_taxonomy'] = df['overture_taxonomy'].apply(lambda val: val.strip().strip('[]').split(','))
-    
+    df["overture_taxonomy"] = df["overture_taxonomy"].apply(
+        lambda val: val.strip().strip("[]").split(",")
+    )
+
     # strip whitespace from each taxonomy item
-    df['overture_taxonomy'] = df['overture_taxonomy'].apply(lambda lst: [item.strip() for item in lst])
-    
+    df["overture_taxonomy"] = df["overture_taxonomy"].apply(
+        lambda lst: [item.strip() for item in lst]
+    )
+
     # get the maximum depth for category taxonomies
-    df['list_length'] = df['overture_taxonomy'].str.len()
-    max_lst_len = df['list_length'].max()
+    df["list_length"] = df["overture_taxonomy"].str.len()
+    max_lst_len = df["list_length"].max()
 
-    # iterate into maximum depth for 
+    # iterate into maximum depth for
     for idx in range(max_lst_len):
-
         # create the name for the category
-        col_nm = f'category_{idx + 1:02d}'
-    
+        col_nm = f"category_{idx + 1:02d}"
+
         # get the overture taxonomy value for the index corresponding to the code
-        df[col_nm] = df['category_code'].apply(lambda cat_code: get_category_in_taxonomy(df, cat_code, idx))
+        df[col_nm] = df["category_code"].apply(
+            lambda cat_code: get_category_in_taxonomy(df, cat_code, idx)
+        )
 
     return df
 
 
-def get_overture_taxonomy_category_field_max_lengths(df: Optional[pd.DataFrame] = None) -> dict[str, int]:
+def get_overture_taxonomy_category_field_max_lengths(
+    df: Optional[pd.DataFrame] = None,
+) -> dict[str, int]:
     """
     Retrieve the maximum lengths of each category field in the Overture taxonomy.
 
@@ -618,7 +646,7 @@ def get_overture_taxonomy_category_field_max_lengths(df: Optional[pd.DataFrame] 
         df = get_overture_taxonomy_dataframe()
 
     # only keep columns describing category levels
-    cols = [c for c in df.columns if c.startswith('category')]
+    cols = [c for c in df.columns if c.startswith("category")]
 
     # create dictionary to hold max lengths
     max_lengths = {}

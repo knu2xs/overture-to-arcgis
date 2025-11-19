@@ -1,0 +1,6 @@
+﻿<?xml version="1.0" encoding="utf-8"?><messages><msg code="0" type="2">Start Time: Tuesday, 28 October, 2025 15:25:38</msg><msg code="0" type="0">2025-10-28 15:25:38,899 | overture_to_arcgis.utils._arcgis | DEBUG | 'subclass' field already exists in features.</msg><msg code="1" type="100">﻿Traceback (most recent call last):
+﻿  File "&lt;string&gt;", line 576, in execute
+﻿  File "D:\projects\overture-to-arcgis\src\overture_to_arcgis\utils\_arcgis.py", line 939, in split_into_subclass_features
+﻿    for row in update_cursor:
+﻿RuntimeError: Cannot acquire a lock.
+</msg><msg code="-2147467259" type="100">Failed to execute (AddSubclasses).</msg><msg code="0" type="3">Failed at Tuesday, 28 October, 2025 15:25:40 (Elapsed Time: 2.24 seconds)</msg></messages>

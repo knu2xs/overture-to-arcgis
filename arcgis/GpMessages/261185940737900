@@ -1,0 +1,7 @@
+﻿<?xml version="1.0" encoding="utf-8"?><messages><msg code="0" type="2">Start Time: Monday, 27 October, 2025 15:42:25</msg><msg code="0" type="0">2025-10-27 15:42:26,081 | overture_to_arcgis.utils._arcgis | DEBUG | Added 'primary_name' field to features.</msg><msg code="0" type="0">2025-10-27 15:42:26,092 | overture_to_arcgis.utils._arcgis | DEBUG | Set 'primary_name' to '328th Street South' for feature.</msg><msg code="0" type="0">2025-10-27 15:42:26,092 | overture_to_arcgis.utils._arcgis | DEBUG | Set 'primary_name' to 'State Route 702 South' for feature.</msg><msg code="1" type="100">﻿Traceback (most recent call last):
+﻿  File "&lt;string&gt;", line 253, in execute
+﻿  File "D:\projects\overture-to-arcgis\src\overture_to_arcgis\utils\_arcgis.py", line 106, in add_primary_name
+﻿    primary_name = name_dict.get("primary")
+﻿                   ^^^^^^^^^^^^^
+﻿AttributeError: 'NoneType' object has no attribute 'get'
+</msg><msg code="-2147467259" type="100">Failed to execute (AddPrimaryNameField).</msg><msg code="0" type="3">Failed at Monday, 27 October, 2025 15:42:26 (Elapsed Time: 0.62 seconds)</msg></messages>

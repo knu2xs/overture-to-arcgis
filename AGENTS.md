@@ -59,7 +59,7 @@ def example_function(param1: int, param2: str) -> bool:
 - Add comments for complex logic.
 - For data science tasks, prefer pandas, numpy, and scikit-learn when possible.
 - Use logging instead of print statements for debug/info messages.
-- Add two lines before and one line after function and class definitions.
+- Add two lines between function and class definitions.
 - Use PyTest for unit tests and ensure at least 80% code coverage.
 
 ### 5. AI Assistant Usage

@@ -8,7 +8,7 @@ from typing import Union
 import arcpy
 import pandas as pd
 
-from overture_to_arcgis.utils.__main__ import convert_complex_columns_to_strings
+from .utils.__main__ import convert_complex_columns_to_strings
 
 from .utils import (
     get_all_overture_types,
@@ -68,10 +68,8 @@ def get_spatially_enabled_dataframe(
 
     # iterate the batches
     for idx, batch in enumerate(batches):
-
         # if the batch has any rows and the dataframe is not yet initialized
         if batch.num_rows > 0 and df is None:
-
             # create the initial dataframe
             df = table_to_spatially_enabled_dataframe(batch)
 
@@ -130,7 +128,7 @@ def get_features(
         Path to the created feature class.
     """
     # ensure arcpy is available
-    if find_spec('arcpy') is None:
+    if find_spec("arcpy") is None:
         raise EnvironmentError("ArcPy is required for get_as_feature_class.")
 
     # validate the bounding box
@@ -176,7 +174,9 @@ def get_features(
     if len(fc_list) > 0:
         arcpy.management.Merge(fc_list, str(output_feature_class))
     else:
-        logger.warning("No data found for the specified bounding box. No output feature class created.")
+        logger.warning(
+            "No data found for the specified bounding box. No output feature class created."
+        )
 
     # cleanup temporary data - remove temporary geodatabase using arcpy to avoid any locks
     arcpy.management.Delete(str(tmp_gdb))

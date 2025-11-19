@@ -8,6 +8,9 @@ site_dir: ../docs
 #   - Home: index.md
 #   - API: api.md
 
+# repo url so link shows up in nav bar
+repo_url: https://github.com/knu2xs/overture-to-arcgis
+
 theme:
   name: material
 
