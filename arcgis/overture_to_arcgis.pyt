@@ -420,44 +420,18 @@ class AddOvertureTaxonomyCodeFields:
             direction="Input"
         )
 
-        # create a parameter to set the single category field
-        single_category_field = arcpy.Parameter(
-            displayName="Single Category Field",
-            name="single_category_field",
-            datatype="GPString",
-            parameterType="Required",
-            direction="Input"
-        )
-        single_category_field.value = "primary_category"
-        single_category_field.filter.type = "ValueList"
-
-        params = [input_features, single_category_field]
+        params = [input_features]
 
         return params
-
-    def updateParameters(self, parameters):
-        """Update the tool's parameters."""
-        # update the primary category field value
-        input_features = parameters[0]
-        single_category_field = parameters[1]
-        
-        if input_features.value:
-            try:
-                fields = [f.name for f in arcpy.ListFields(input_features.value) if f.type.upper() == 'TEXT']
-                single_category_field.filter.list = fields
-            except Exception as e:
-                arcpy.AddWarning(f"Could not list fields: {e}")
-        return
     
     def execute(self, parameters, messages):
         """The source code of the tool."""
 
         # retrieve the data directory path from parameters
         input_features = parameters[0].value
-        single_category_field = parameters[1].valueAsText
 
         # add overture taxonomy code fields
-        overture_to_arcgis.utils.add_overture_taxonomy_fields(input_features, single_category_field)
+        overture_to_arcgis.utils.add_overture_taxonomy_fields(input_features)
 
         return
     

@@ -51,11 +51,11 @@ def extent_small():
 
 
 @pytest.fixture(scope="function")
-def features_small(tmp_gdb: Path, extent_small: tuple[float, float, float, float]):
+def features_small_segments(tmp_gdb: Path, extent_small: tuple[float, float, float, float]):
     """Provide a small set of test features for tests."""
     import arcpy
 
-    fc_pth = tmp_gdb / "test_features_small"
+    fc_pth = tmp_gdb / "test_features_small_segments"
 
     from overture_to_arcgis import get_features
 
@@ -65,6 +65,23 @@ def features_small(tmp_gdb: Path, extent_small: tuple[float, float, float, float
 
     # remove using arcpy to avoid schema locks
     arcpy.Delete_management(fc_pth)
+
+
+@pytest.fixture(scope="function")
+def features_small_places(tmp_gdb: Path, extent_small: tuple[float, float, float, float]):
+    """Provide a small set of test features for tests."""
+    import arcpy
+
+    fc_pth = tmp_gdb / "test_features_small_places"
+    
+    from overture_to_arcgis import get_features
+
+    output_features = get_features(fc_pth, overture_type="place", bbox=extent_small)
+
+    yield output_features
+
+    # remove using arcpy to avoid schema locks
+    arcpy.management.Delete(str(fc_pth))
 
 
 @pytest.fixture(scope="function")

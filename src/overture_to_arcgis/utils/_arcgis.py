@@ -340,24 +340,29 @@ def add_alternate_category_field(features: Union[arcpy._mp.Layer, str, Path]) ->
 
 
 def add_overture_taxonomy_fields(
-    features: Union[str, Path, arcpy._mp.Layer],
-    single_category_field: Optional[str] = None,
+    features: Union[str, Path, arcpy._mp.Layer]
 ) -> None:
     """
-    Add 'category_<n>' fields to the input features based on the Overture taxonomy based on the category provided for each row.
-    The category for each row can be specified using the `single_category_field` parameter.
+    Add 'category_<n>' fields to the input features based on the Overture taxonomy based on the category provided for
+    each row. The category for each row can be specified using the `single_category_field` parameter.
 
     !!! note
-        If a single category field is not provided, the function will attempt to read the value for the `primary` key from
-        string JSON in the `categories` field, if this field exists.
+        This function attempts to read the value for the `primary` key from string JSON in the `categories` field.
+        If this field does not exist, this will raise an error.
 
     Args:
         features: The input feature layer or feature class.
-        single_category_field: The field name containing a single category.
     """
     # if features is a path, convert to string - arcpy cannot handle Path objects
     if isinstance(features, Path):
         features = str(features)
+
+    # describe the features and ensure it is point geometry
+    desc = arcpy.Describe(features)
+    if desc.shapeType not in ["Point", "Multipoint"]:
+        raise ValueError(
+            "Input features must be of point geometry type to add Overture taxonomy fields."
+        )
 
     # make sure features is a path string if a layer is provided - this avoids schema lock issues with AddField
     if isinstance(features, arcpy._mp.Layer):
@@ -366,38 +371,20 @@ def add_overture_taxonomy_fields(
     # get a list of existing field names
     field_names = [f.name for f in arcpy.ListFields(features)]
 
-    # if single category not provided, attempt to use the 'categories' field to extract the primary category
-    if single_category_field is None:
-        # ensure the 'categories' field exists
-        if "categories" not in field_names:
-            raise ValueError(
-                "Field for category extraction, 'categories', does not exist in features."
-            )
-
-        # create a generator to extract categories from the 'categories' field
-        categories_gen = (
-            json.loads(row[0]).get("primary")
-            for row in arcpy.da.SearchCursor(features, ["categories"])
+    # ensure the 'categories' field exists
+    if "categories" not in field_names:
+        raise ValueError(
+            "Field for category extraction, 'categories', does not exist in features."
         )
 
-        # root name for the taxonomy fields
-        root_name = "primary_category"
+    # create a generator to extract categories from the 'categories' field
+    categories_gen = (
+        json.loads(row[0]).get("primary")
+        for row in arcpy.da.SearchCursor(features, ["categories"])
+    )
 
-    # if single category field is provided
-    else:
-        # ensure the single category field exists
-        if single_category_field not in field_names:
-            raise ValueError(
-                f"Provided single category field '{single_category_field}' does not exist in features."
-            )
-
-        # create a generator to extract categories from the single category field
-        categories_gen = (
-            row[0] for row in arcpy.da.SearchCursor(features, [single_category_field])
-        )
-
-        # root name for the taxonomy fields
-        root_name = slugify(single_category_field)
+    # root name for the taxonomy fields
+    root_name = "primary_category"
 
     # get taxonomy dataframe
     taxonomy_df = get_overture_taxonomy_dataframe()
@@ -434,8 +421,14 @@ def add_overture_taxonomy_fields(
 
         logger.info(f"Added field '{col}' with length {max_len} to features.")
 
+    # get the intersection of rows and taxonomy columns
+    col_lst = [col for col in max_lengths.keys() if col in taxonomy_df.columns]
+
+    # add the primary category column to the list
+    col_lst.insert(0, f"{root_name}_code")
+
     # calculate the category code fields from the categories generator
-    with arcpy.da.UpdateCursor(features, list(max_lengths.keys())) as update_cursor:
+    with arcpy.da.UpdateCursor(features, col_lst) as update_cursor:
         # iterate through the rows and categories
         for row, category in zip(update_cursor, categories_gen):
             # set the category fields if category is valid
@@ -451,9 +444,13 @@ def add_overture_taxonomy_fields(
 
                 # if a taxonomy row is found, set the category fields
                 if not taxonomy_row.empty:
-                    # iterate through the category fields and set their values
-                    for idx, col in enumerate(max_lengths.keys()):
-                        row[idx] = taxonomy_row.loc[col]
+
+                    # hydrate the first column with the category code
+                    row[0] = taxonomy_row.name
+
+                    # populate the rest of the values with values from the taxonomy row
+                    for idx, col in enumerate(col_lst[1:]):
+                        row[idx + 1] = taxonomy_row.loc[col]
 
                     # update the row
                     update_cursor.updateRow(row)
