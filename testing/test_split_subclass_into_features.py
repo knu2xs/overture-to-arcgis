@@ -130,6 +130,53 @@ def test_output_features_returns_none_when_not_specified(test_fc):
     assert result is None
 
 
+def test_split_trailing_gap(test_fc):
+    """Test that a trailing gap (rule ends before 1.0) produces an extra segment."""
+    rules = '[{"value": "driveway", "between": [0.0, 0.5]}]'
+    insert_polyline(test_fc, [(-122.0, 47.0), (-122.01, 47.01)], rules, 10)
+    split_into_subclass_features(test_fc)
+    with arcpy.da.SearchCursor(test_fc, ["subclass"]) as cursor:
+        values = [row[0] for row in cursor]
+    # expect two features: 0-50% driveway, 50-100% no subclass
+    assert "driveway" in values
+    assert len(values) == 2
+
+
+def test_split_interior_gap(test_fc):
+    """Test that an interior gap between rules produces a gap segment."""
+    rules = (
+        '[{"value": "driveway", "between": [0.0, 0.3]}, '
+        '{"value": "alley", "between": [0.6, 1.0]}]'
+    )
+    insert_polyline(test_fc, [(-122.0, 47.0), (-122.01, 47.01)], rules, 11)
+    split_into_subclass_features(test_fc)
+    with arcpy.da.SearchCursor(test_fc, ["subclass"]) as cursor:
+        values = [row[0] for row in cursor]
+    # expect three features: 0-30% driveway, 30-60% no subclass, 60-100% alley
+    assert "driveway" in values
+    assert "alley" in values
+    assert values.count(None) == 1
+    assert len(values) == 3
+
+
+def test_split_leading_interior_trailing_gaps(test_fc):
+    """Test a rule that has leading, interior, and trailing gaps."""
+    rules = (
+        '[{"value": "driveway", "between": [0.2, 0.4]}, '
+        '{"value": "alley", "between": [0.6, 0.8]}]'
+    )
+    insert_polyline(test_fc, [(-122.0, 47.0), (-122.01, 47.01)], rules, 12)
+    split_into_subclass_features(test_fc)
+    with arcpy.da.SearchCursor(test_fc, ["subclass"]) as cursor:
+        values = [row[0] for row in cursor]
+    # expect 5 features:
+    #   0-20% gap, 20-40% driveway, 40-60% gap, 60-80% alley, 80-100% gap
+    assert "driveway" in values
+    assert "alley" in values
+    assert values.count(None) == 3
+    assert len(values) == 5
+
+
 def test_output_features_rollback_on_missing_field(tmp_gdb):
     """Test rollback deletes output when the source field is missing."""
     # create an input FC *without* subclass_rules

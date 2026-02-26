@@ -57,6 +57,7 @@ class Toolbox:
             AddOvertureTaxonomyCodeFields,
             AddBooleanAccessRestrictionsFields,
             SplitSegmentsIntoSubclassFeatures,
+            SplitSegmentsAtConnectors,
             RemoveRailFeatures,
             AddWalkRestrictionsColumn
         ]
@@ -585,6 +586,73 @@ class SplitSegmentsIntoSubclassFeatures:
 
         # split features into subclass features
         overture_to_arcgis.utils.split_into_subclass_features(
+            input_features, output_features=output_features
+        )
+
+        return
+
+
+class SplitSegmentsAtConnectors:
+    """Tool to split segment polylines at connector points."""
+    def __init__(self):
+        self.label = "Split Segments at Connectors"
+        self.description = (
+            "Split segment polylines at connector points defined in the 'connectors' field. "
+            "Each segment is split into sub-segments between consecutive connector positions, "
+            "producing one new polyline feature per pair of adjacent connectors. "
+            "Features with fewer than three connectors (start and end only) are left untouched."
+        )
+        self.category = "Utilities"
+
+    def getParameterInfo(self):
+
+        # create a parameter to set the input feature layer
+        input_features = arcpy.Parameter(
+            displayName="Input Features",
+            name="input_features",
+            datatype="GPFeatureLayer",
+            parameterType="Required",
+            direction="Input"
+        )
+
+        # filter to only line feature layers
+        input_features.filter.list = ["Polyline"]
+
+        # optional output feature class
+        output_features = arcpy.Parameter(
+            displayName="Output Features",
+            name="output_features",
+            datatype="DEFeatureClass",
+            parameterType="Optional",
+            direction="Output"
+        )
+
+        params = [input_features, output_features]
+
+        return params
+
+    def updateMessages(self, parameters):
+        """Validate that the input features contain the required 'connectors' field."""
+        input_features = parameters[0]
+
+        if input_features.altered and input_features.value:
+            field_names = [f.name for f in arcpy.ListFields(input_features.valueAsText)]
+            if "connectors" not in field_names:
+                input_features.setErrorMessage(
+                    "Input features must contain a 'connectors' field."
+                )
+
+        return
+
+    def execute(self, parameters, messages):
+        """Split segment polylines at connector points."""
+
+        # retrieve input features from parameters
+        input_features = parameters[0].valueAsText
+        output_features = parameters[1].valueAsText
+
+        # split segments at connector points
+        overture_to_arcgis.utils.split_segments_at_connectors(
             input_features, output_features=output_features
         )
 
