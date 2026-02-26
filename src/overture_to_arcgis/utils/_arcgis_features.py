@@ -81,7 +81,7 @@ def split_into_subclass_features(
     """
     Split features into subsegments based on the definition in the 'subclass_rules' field.
 
-    When ``output_features`` is provided the input data is first copied to the
+    When `output_features` is provided the input data is first copied to the
     specified location and the split is performed on the copy.  If the process
     fails, the newly created output dataset is deleted so the caller never sees
     a half-processed result.
@@ -94,7 +94,18 @@ def split_into_subclass_features(
     #    -> two features: 0-77.28% with null subclass, 77.28-100% with 'driveway'
     # 3. [{"value": "driveway", "between": [0.0, 0.5]}, {"value": "alley", "between": [0.5, 1.0]}]
     #    -> two subsegments with 'subclass' field populated accordingly
+    # 4. [{"value": "driveway", "between": [0.0, 0.3]}, {"value": "alley", "between": [0.6, 1.0]}]
+    #    -> three features: 0-30% 'driveway', 30-60% gap (original properties, no subclass),
+    #       60-100% 'alley'
+    # 5. [{"value": "driveway", "between": [0.0, 0.5]}]
+    #    -> two features: 0-50% 'driveway', 50-100% trailing gap (original properties,
+    #       no subclass)
     ```
+
+    !!! note
+        Any gaps between rules (leading, interior, or trailing) are filled
+        with segments that retain the original feature's properties but have
+        a `None` subclass value.
 
     Args:
         features: The input feature layer or feature class.
@@ -103,14 +114,14 @@ def split_into_subclass_features(
             and the original data is left untouched.
 
     Returns:
-        The path to the output feature class when ``output_features`` is
-        provided, otherwise ``None`` (in-place modification).
+        The path to the output feature class when `output_features` is
+        provided, otherwise `None` (in-place modification).
 
     Raises:
-        ValueError: If the required ``subclass_rules`` field is missing.
+        ValueError: If the required `subclass_rules` field is missing.
 
     !!! warning
-        When ``output_features`` is *not* provided this function modifies
+        When `output_features` is *not* provided this function modifies
         the input features in place by adding new features and deleting the
         original ones.
     """
@@ -135,6 +146,10 @@ def split_into_subclass_features(
 
         # from here on, operate on the copy
         features = output_features
+
+    # log the initial feature count
+    initial_count = int(arcpy.management.GetCount(features)[0])
+    logger.info(f"Starting split_into_subclass_features with {initial_count:,} features.")
 
     # get a list of existing field names
     field_names = [f.name for f in arcpy.ListFields(features)]
@@ -215,55 +230,60 @@ def split_into_subclass_features(
                         # parse the subclass_rules string into a list of dictionaries
                         subclass_rules = json.loads(subclass_rules_str)
 
-                        # process each subclass rule
-                        for idx, rule in enumerate(subclass_rules):
-                            # The geometry object for the current feature
-                            geom = row[-1]
+                        # common indices resolved once per feature
+                        geom = row[-1]
+                        subclass_idx = cursor_fields.index("subclass")
+                        oid_idx = cursor_fields.index(desc.OIDFieldName)
 
-                            # Index of subclass field
-                            subclass_idx = cursor_fields.index("subclass")
+                        # sort rules by start fraction so gaps can be detected in order
+                        between_rules = [
+                            r for r in subclass_rules if r.get("between") is not None
+                        ]
+                        no_between_rules = [
+                            r for r in subclass_rules if r.get("between") is None
+                        ]
 
-                            # Index of OID field
-                            oid_idx = cursor_fields.index(desc.OIDFieldName)
-
-                            # Extract the subclass value and the segment range (between)
+                        # handle rules without a 'between' range (whole-geometry assignment)
+                        for rule in no_between_rules:
                             value = rule.get("value")
-                            between = rule.get("between")
+                            row[subclass_idx] = value
+                            update_cursor.updateRow(row)
+                            logger.debug(
+                                f"Updated feature with OID {row[0]} to have subclass '{value}' for entire geometry."
+                            )
+                            update_cnt += 1
 
-                            if between is None:
-                                # If 'between' is None, update the current row to set the subclass for the entire geometry
-                                row[subclass_idx] = value
-                                update_cursor.updateRow(row)
-                                logger.debug(
-                                    f"Updated feature with OID {row[0]} to have subclass '{value}' for entire geometry."
-                                )
-                                update_cnt += 1
-                            else:
-                                # If this is the first rule and the segment does not start at 0, retain the original row for the initial segment
-                                if idx == 0 and between[0] > 0:
-                                    new_row = list(row)  # Copy the original row
+                        # process rules that define subsegments
+                        if between_rules:
+                            # sort by start fraction to process in order
+                            between_rules.sort(key=lambda r: r["between"][0])
 
-                                    # Create a geometry subsegment from 0 to the start of 'between'
-                                    new_row[-1] = geom.segmentAlongLine(
-                                        0.0, between[0] * geom.length
+                            # track the end of the last emitted segment
+                            prev_end_frac = 0.0
+
+                            for rule in between_rules:
+                                value = rule.get("value")
+                                start_frac, end_frac = rule["between"]
+
+                                # emit a gap segment if there is space before the current rule
+                                if start_frac > prev_end_frac:
+                                    gap_row = list(row)
+                                    gap_row[-1] = geom.segmentAlongLine(
+                                        prev_end_frac * geom.length,
+                                        start_frac * geom.length,
                                     )
-                                    insert_cursor.insertRow(new_row)
+                                    insert_cursor.insertRow(gap_row)
                                     logger.debug(
-                                        f"Inserted new feature with no subclass from 0.0000 to {between[0]:.4f} fraction of geometry."
+                                        f"Inserted gap feature (no subclass) from {prev_end_frac:.4f} to {start_frac:.4f} fraction of geometry."
                                     )
                                     add_cnt += 1
 
-                                # For the current rule, create a new row for the specified subclass and segment
+                                # emit the segment for the current rule
                                 new_row = list(row)
-                                new_row[subclass_idx] = value  # Set the subclass value
-                                (
-                                    start_frac,
-                                    end_frac,
-                                ) = between  # Segment start and end fractions
-
-                                # Create a geometry subsegment for the specified range
+                                new_row[subclass_idx] = value
                                 new_row[-1] = geom.segmentAlongLine(
-                                    start_frac * geom.length, end_frac * geom.length
+                                    start_frac * geom.length,
+                                    end_frac * geom.length,
                                 )
                                 insert_cursor.insertRow(new_row)
                                 logger.debug(
@@ -271,8 +291,23 @@ def split_into_subclass_features(
                                 )
                                 add_cnt += 1
 
-                                # Mark the original feature for deletion after splitting
-                                del_oid_lst.append(row[oid_idx])
+                                prev_end_frac = end_frac
+
+                            # emit a trailing gap segment if the last rule did not reach 1.0
+                            if prev_end_frac < 1.0:
+                                trail_row = list(row)
+                                trail_row[-1] = geom.segmentAlongLine(
+                                    prev_end_frac * geom.length,
+                                    geom.length,
+                                )
+                                insert_cursor.insertRow(trail_row)
+                                logger.debug(
+                                    f"Inserted trailing gap feature (no subclass) from {prev_end_frac:.4f} to 1.0000 fraction of geometry."
+                                )
+                                add_cnt += 1
+
+                            # mark the original feature for deletion after splitting
+                            del_oid_lst.append(row[oid_idx])
 
         # append the new features from the temporary feature class to the original features
         arcpy.management.Append(
@@ -297,9 +332,10 @@ def split_into_subclass_features(
         logger.debug("Deleted temporary file geodatabase.")
 
         # log the final counts
+        final_count = int(arcpy.management.GetCount(features)[0])
         logger.info(
             f"Added {add_cnt:,} new subclass features, updated {update_cnt:,} existing features, and deleted "
-            f"{len(del_oid_lst):,} original features."
+            f"{len(del_oid_lst):,} original features. Final feature count: {final_count:,}."
         )
 
     except Exception:
@@ -308,6 +344,239 @@ def split_into_subclass_features(
             arcpy.management.Delete(output_features)
             logger.error(
                 "Split failed — rolled back by deleting the output feature class."
+            )
+        raise
+
+    return output_features
+
+
+def split_segments_at_connectors(
+    features: Union[str, Path, arcpy._mp.Layer],
+    output_features: Optional[Union[str, Path]] = None,
+) -> Optional[str]:
+    """
+    Split segment polylines at connector points defined in the `connectors` field.
+
+    In the Overture Maps transportation schema each segment carries a
+    `connectors` field containing a JSON array of objects.  Each object
+    has a `connector_id` (the Overture ID of the connecting node) and an
+    `at` value representing a fraction (0.0 – 1.0) along the segment
+    geometry where the connector is located.
+
+    This function reads those fractions, sorts them, and produces one new
+    polyline feature for every pair of consecutive connector positions.
+    Attributes from the original feature are copied to each resulting
+    sub-segment.
+
+    When `output_features` is provided the input data is first copied to
+    the specified location and all processing is performed on the copy.
+    If the process fails, the newly created output dataset is deleted so
+    the caller never sees a half-processed result.
+
+    ``` python
+    # Example connectors values:
+    # [{"connector_id": "abc", "at": 0.0}, {"connector_id": "def", "at": 1.0}]
+    #    -> no split needed (start to end)
+    # [{"connector_id": "abc", "at": 0.0}, {"connector_id": "mid", "at": 0.4},
+    #  {"connector_id": "def", "at": 1.0}]
+    #    -> two features: 0–40% and 40–100% of the original geometry
+    ```
+
+    !!! note
+        Features whose `connectors` field is *null*, empty, unparseable,
+        or contains fewer than three connector entries (i.e. only start and
+        end) are left untouched because no interior split is required.
+
+    Args:
+        features: The input feature layer or feature class containing
+            Overture segment polylines.
+        output_features: Optional path to an output feature class.  When
+            supplied, the input features are copied here before splitting
+            and the original data is left untouched.
+
+    Returns:
+        The path to the output feature class when `output_features` is
+        provided, otherwise `None` (in-place modification).
+
+    Raises:
+        ValueError: If the required `connectors` field is missing.
+
+    !!! warning
+        When `output_features` is *not* provided this function modifies
+        the input features in place by inserting new sub-segment features
+        and deleting the originals that were split.
+    """
+    # if features is a path, convert to string - arcpy cannot handle Path objects
+    if isinstance(features, Path):
+        features = str(features)
+
+    # resolve to catalog path when a layer is provided to avoid schema locks
+    if isinstance(features, arcpy._mp.Layer):
+        features = arcpy.Describe(features).catalogPath
+
+    # ------------------------------------------------------------------
+    # If an output location was requested, copy the features there first
+    # and redirect all subsequent operations to the copy.
+    # ------------------------------------------------------------------
+    if output_features is not None:
+        if isinstance(output_features, Path):
+            output_features = str(output_features)
+
+        logger.debug(f"Copying features to output location: {output_features}")
+        arcpy.management.CopyFeatures(features, output_features)
+
+        # from here on, operate on the copy
+        features = output_features
+
+    # log the initial feature count
+    initial_count = int(arcpy.management.GetCount(features)[0])
+    logger.info(
+        f"Starting split_segments_at_connectors with {initial_count:,} features."
+    )
+
+    # get a list of existing field names
+    field_names = [f.name for f in arcpy.ListFields(features)]
+
+    # ensure the connectors field exists
+    connectors_field = "connectors"
+    if connectors_field not in field_names:
+        # roll back the copy if it was created before the validation error
+        if output_features is not None and arcpy.Exists(output_features):
+            arcpy.management.Delete(output_features)
+            logger.debug(
+                "Rolled back output feature class after validation failure."
+            )
+        raise ValueError(
+            f"Source field '{connectors_field}' does not exist in features. "
+            f"This is necessary to split segments at connector points."
+        )
+
+    try:
+        # counters
+        add_cnt = 0
+        del_oid_lst: list[int] = []
+
+        # create a temporary feature class with the same schema to hold new features
+        tmp_gdb = get_tmp_gdb()
+        desc = arcpy.Describe(features)
+        tmp_fc = arcpy.management.CreateFeatureclass(
+            out_path=str(tmp_gdb),
+            out_name=f"temp_connectors_{uuid.uuid4().hex}",
+            geometry_type=desc.shapeType,
+            template=features,
+            spatial_reference=desc.spatialReference,
+        )[0]
+
+        logger.debug(
+            f"Created temporary feature class for connector-split features: {tmp_fc}"
+        )
+
+        # build cursor field list (all fields except shape, plus SHAPE@ token)
+        cursor_fields = [f for f in field_names if f != desc.shapeFieldName]
+        cursor_fields = cursor_fields + ["SHAPE@"]
+
+        # resolve field indices once
+        connectors_idx = cursor_fields.index(connectors_field)
+        oid_idx = cursor_fields.index(desc.OIDFieldName)
+
+        # read + split
+        with arcpy.da.UpdateCursor(features, cursor_fields) as update_cursor:
+            with arcpy.da.InsertCursor(tmp_fc, cursor_fields) as insert_cursor:
+                for row in update_cursor:
+                    connectors_str = row[connectors_idx]
+
+                    # skip features with no valid connectors value
+                    if (
+                        connectors_str is None
+                        or not isinstance(connectors_str, str)
+                        or connectors_str.strip() in ("", "null")
+                    ):
+                        continue
+
+                    # attempt to parse the JSON
+                    try:
+                        connectors_list = json.loads(connectors_str)
+                    except (json.JSONDecodeError, TypeError):
+                        logger.debug(
+                            f"Skipping OID {row[oid_idx]}: unable to parse connectors JSON."
+                        )
+                        continue
+
+                    # must be a non-empty list
+                    if not isinstance(connectors_list, list) or len(connectors_list) == 0:
+                        continue
+
+                    # extract unique sorted fractions
+                    fractions = sorted(
+                        {
+                            float(c["at"])
+                            for c in connectors_list
+                            if "at" in c and c["at"] is not None
+                        }
+                    )
+
+                    # need at least 3 fractions to produce interior splits
+                    if len(fractions) < 3:
+                        continue
+
+                    geom = row[-1]
+                    line_length = geom.length
+
+                    # create one sub-segment for each consecutive pair of fractions
+                    for i in range(len(fractions) - 1):
+                        start_frac = fractions[i]
+                        end_frac = fractions[i + 1]
+
+                        new_row = list(row)
+                        new_row[-1] = geom.segmentAlongLine(
+                            start_frac * line_length,
+                            end_frac * line_length,
+                        )
+                        insert_cursor.insertRow(new_row)
+                        logger.debug(
+                            f"Inserted connector sub-segment from "
+                            f"{start_frac:.4f} to {end_frac:.4f} for OID {row[oid_idx]}."
+                        )
+                        add_cnt += 1
+
+                    # mark the original feature for deletion
+                    del_oid_lst.append(row[oid_idx])
+
+        # append the new features from the temporary feature class into the target
+        arcpy.management.Append(
+            inputs=tmp_fc,
+            target=features,
+            schema_type="NO_TEST",
+        )
+        logger.debug("Appended connector-split features to target features.")
+
+        # delete the original features that were split
+        del_oid_set = set(del_oid_lst)
+        with arcpy.da.UpdateCursor(features, "OID@") as drop_cursor:
+            for row in drop_cursor:
+                if row[0] in del_oid_set:
+                    drop_cursor.deleteRow()
+
+        logger.debug("Deleted original features that were split at connectors.")
+
+        # clean up temporary geodatabase
+        shutil.rmtree(tmp_gdb, ignore_errors=True)
+        logger.debug("Deleted temporary file geodatabase.")
+
+        # log final counts
+        final_count = int(arcpy.management.GetCount(features)[0])
+        logger.info(
+            f"Added {add_cnt:,} connector-split sub-segments and deleted "
+            f"{len(del_oid_lst):,} original features. "
+            f"Final feature count: {final_count:,}."
+        )
+
+    except Exception:
+        # roll back output copy on failure
+        if output_features is not None and arcpy.Exists(output_features):
+            arcpy.management.Delete(output_features)
+            logger.error(
+                "Split at connectors failed — rolled back by deleting the output feature class."
             )
         raise
 

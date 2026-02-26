@@ -27,6 +27,7 @@ from ._arcgis_features import (
     get_layers_for_unique_values,
     remove_rail_features,
     split_into_subclass_features,
+    split_segments_at_connectors,
 )
 from ._arcgis_routing import add_restrictions_column
 
@@ -51,6 +52,7 @@ __all__ = [
     "has_h3",
     "remove_rail_features",
     "split_into_subclass_features",
+    "split_segments_at_connectors",
     "table_to_features",
     "table_to_spatially_enabled_dataframe",
     "validate_bounding_box",
