@@ -24,6 +24,7 @@ from ._arcgis import (
     remove_rail_features,
     split_into_subclass_features,
 )
+from ._arcgis_routing import add_restrictions_column
 
 __all__ = [
     "add_alternate_category_field",
@@ -33,6 +34,7 @@ __all__ = [
     "add_primary_category_field",
     "add_primary_name",
     "add_trail_field",
+    "add_restrictions_column",
     "add_website_field",
     "get_all_overture_types",
     "get_logger",

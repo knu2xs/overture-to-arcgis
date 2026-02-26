@@ -1,4 +1,5 @@
 import gc
+import os
 import shutil
 import tempfile
 import uuid
@@ -19,7 +20,51 @@ from .__main__ import slugify
 from ._logging import get_logger
 
 # configure module logging
-logger = get_logger(logger_name=__name__, level="DEBUG", add_stream_handler=False)
+logger = get_logger(logger_name=Path(__file__).stem, level="DEBUG", add_stream_handler=False)
+
+
+# contsants
+
+# restrictions for walking network routing
+RESTRICTIONS_WALK = {
+    'class': {
+        'rail': {
+            'avoid': 'high'
+        },
+        'water': {
+            'prohibited': True
+        }
+    },
+    'class': {
+        'bridleway': {
+            'avoid': 'low'
+        },
+        'cycleway': {
+            'avoid': 'low'
+        },
+        'footway': {
+            'prefer': 'high'
+        },
+        'living_street': {
+            'prefer': 'medium'
+        },
+        'motorway': {
+            'avoid': 'high'
+        },
+        'path': {
+            'prefer': 'high',
+        },
+        'pedestrian': {
+            'prefer': 'high'
+        },
+        'primary': {
+            'avoid': 'high'
+        },
+        'secondary': {
+            'avoid': 'medium'
+        },
+    }
+}
 
 
 def get_tmp_gdb() -> Path:
@@ -1145,3 +1190,81 @@ def get_featureset_batches(
         batch_fs = FeatureSet.from_json(batch_arcpy_fs.JSON)
 
         yield batch_fs
+
+
+def create_network_dataset(
+    edge_features: Union[str, Path, arcpy._mp.Layer],
+    geodatabase: Union[str, Path],
+    feature_dataset_name: str,
+    network_dataset_name: str,
+    travel_mode_name: Optional[str] = "Walking Distance",
+) -> Path:
+    """
+    Create a network dataset from the input features.
+
+    Args:
+        edge_features: The input line feature layer or feature class.
+        geodatabase: The output geodatabase to create the network dataset in.
+        feature_dataset_name: The name of the feature dataset to create the network dataset in.
+        network_dataset_name: The name of the network dataset to create.
+        travel_mode_name: The name of the travel mode to use for the network dataset.
+    """
+    # if features is a path, convert to string - arcpy cannot handle Path objects
+    if isinstance(edge_features, Path):
+        edge_features = str(edge_features)
+
+    # ensure the input features exist
+    if not arcpy.Exists(edge_features):
+        raise FileNotFoundError("Cannot access the path for the input features.")
+
+    # if the geodatabase is a Path, convert to string
+    if isinstance(geodatabase, Path):
+        geodatabase = str(geodatabase)
+
+    # if the geodatabase does not exist, create it
+    if not arcpy.Exists(geodatabase):
+        arcpy.management.CreateFileGDB(
+            out_folder=os.path.dirname(geodatabase),
+            out_name=os.path.basename(geodatabase),
+        )
+        logger.info(f"Created geodatabase at '{geodatabase}'.")
+    else:
+        logger.info(f"Using existing geodatabase at '{geodatabase}'.")
+
+    # if the feature dataset does not exist, create it
+    feature_dataset_path = os.path.join(geodatabase, feature_dataset_name)
+    if not arcpy.Exists(feature_dataset_path):
+        # get the spatial reference from the input features
+        spatial_ref = arcpy.Describe(edge_features).spatialReference
+
+        arcpy.management.CreateFeatureDataset(
+            out_dataset=geodatabase,
+            out_name=feature_dataset_name,
+            spatial_reference=spatial_ref,
+        )
+
+        logger.info(f"Created feature dataset '{feature_dataset_name}' in geodatabase.")
+
+    else:
+        logger.info(
+            f"Using existing feature dataset '{feature_dataset_name}' in geodatabase."
+        )
+
+    # create the network dataset
+    output_network_dataset = os.path.join(
+        feature_dataset_path, f"{network_dataset_name}.nd"
+    )
+
+    #
+    arcpy.na.CreateNetworkDataset(
+        feature_dataset=feature_dataset_path,
+        out_name=network_dataset_name,
+        source_feature_class_names=[edge_features],
+        elevation_model="NO_ELEVATION"
+    )
+
+    logger.info(
+        f"Created network dataset '{output_network_dataset}' from features with travel mode '{travel_mode_name}'."
+    )
+
+    return Path(output_network_dataset)
