@@ -5,7 +5,7 @@ import pytest
 import arcpy
 import json
 from pathlib import Path
-from overture_to_arcgis.utils._arcgis import add_overture_taxonomy_fields
+from overture_to_arcgis.utils._arcgis_fields import add_overture_taxonomy_fields
 
 
 def test_add_overture_taxonomy_fields_primary(features_small_places):

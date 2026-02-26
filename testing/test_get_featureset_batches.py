@@ -4,7 +4,7 @@ Test suite for get_featureset_batches in overture_to_arcgis.utils._arcgis
 import pytest
 import arcpy
 from pathlib import Path
-from overture_to_arcgis.utils._arcgis import get_featureset_batches
+from overture_to_arcgis.utils._arcgis_features import get_featureset_batches
 
 
 def create_test_fc(tmp_gdb, n=10):

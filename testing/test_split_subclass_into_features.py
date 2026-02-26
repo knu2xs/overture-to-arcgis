@@ -1,7 +1,7 @@
 import pytest
 import arcpy
 from pathlib import Path
-from overture_to_arcgis.utils._arcgis import split_into_subclass_features
+from overture_to_arcgis.utils._arcgis_features import split_into_subclass_features
 
 
 @pytest.fixture

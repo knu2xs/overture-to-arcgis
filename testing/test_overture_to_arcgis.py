@@ -19,7 +19,7 @@ dir_src = dir_prj / "src"
 # insert the src directory into the path and import the project package
 sys.path.insert(0, str(dir_src))
 import overture_to_arcgis
-from overture_to_arcgis.utils._arcgis import flatten_dict_to_bool_keys
+from overture_to_arcgis.utils._arcgis_access import flatten_dict_to_bool_keys
 
 
 @pytest.fixture(scope="session")

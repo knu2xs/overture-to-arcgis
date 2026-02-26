@@ -11,16 +11,20 @@ from ._core import (
     table_to_spatially_enabled_dataframe,
     validate_bounding_box,
 )
-from ._arcgis import (
+from ._arcgis_fields import (
     add_alternate_category_field,
-    add_boolean_access_restrictions_fields,
     add_overture_taxonomy_fields,
     add_primary_category_field,
     add_primary_name,
     add_trail_field,
-    get_layers_for_unique_values,
     add_website_field,
     add_h3_indices,
+)
+from ._arcgis_access import (
+    add_boolean_access_restrictions_fields,
+)
+from ._arcgis_features import (
+    get_layers_for_unique_values,
     remove_rail_features,
     split_into_subclass_features,
 )
