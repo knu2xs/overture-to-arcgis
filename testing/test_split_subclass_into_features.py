@@ -80,3 +80,70 @@ def test_missing_subclass_rules_field(tmp_gdb):
     )[0]
     with pytest.raises(ValueError, match="subclass_rules"):
         split_into_subclass_features(fc_path)
+
+
+def test_output_features_copies_and_splits(test_fc, tmp_gdb):
+    """Test that providing output_features copies data and splits the copy."""
+    rules = '[{"value": "driveway", "between": null}]'
+    insert_polyline(test_fc, [(-122.0, 47.0), (-122.01, 47.01)], rules, 1)
+
+    output_fc = str(tmp_gdb / "output_fc")
+    result = split_into_subclass_features(test_fc, output_features=output_fc)
+
+    # return value is the output path
+    assert result == output_fc
+    assert arcpy.Exists(output_fc)
+
+    # the output has the split result
+    with arcpy.da.SearchCursor(output_fc, ["subclass"]) as cursor:
+        values = [row[0] for row in cursor]
+    assert "driveway" in values
+
+    # original input is unchanged — it should still have exactly 1 feature and no subclass field added
+    original_count = int(arcpy.management.GetCount(test_fc)[0])
+    assert original_count == 1
+
+
+def test_output_features_subsegments(test_fc, tmp_gdb):
+    """Test output_features with subsegment splitting."""
+    rules = '[{"value": "driveway", "between": [0.5, 1.0]}]'
+    insert_polyline(test_fc, [(-122.0, 47.0), (-122.01, 47.01)], rules, 2)
+
+    output_fc = str(tmp_gdb / "output_subseg")
+    split_into_subclass_features(test_fc, output_features=output_fc)
+
+    with arcpy.da.SearchCursor(output_fc, ["subclass"]) as cursor:
+        values = [row[0] for row in cursor]
+    assert "driveway" in values
+    assert len(values) == 2
+
+    # original unchanged
+    assert int(arcpy.management.GetCount(test_fc)[0]) == 1
+
+
+def test_output_features_returns_none_when_not_specified(test_fc):
+    """Test that the return value is None when output_features is not provided."""
+    rules = '[{"value": "driveway", "between": null}]'
+    insert_polyline(test_fc, [(-122.0, 47.0), (-122.01, 47.01)], rules, 1)
+
+    result = split_into_subclass_features(test_fc)
+    assert result is None
+
+
+def test_output_features_rollback_on_missing_field(tmp_gdb):
+    """Test rollback deletes output when the source field is missing."""
+    # create an input FC *without* subclass_rules
+    input_fc = arcpy.management.CreateFeatureclass(
+        out_path=str(tmp_gdb),
+        out_name="no_rules_fc",
+        geometry_type="POLYLINE",
+        spatial_reference=4326,
+    )[0]
+
+    output_fc = str(tmp_gdb / "should_not_exist")
+
+    with pytest.raises(ValueError, match="subclass_rules"):
+        split_into_subclass_features(input_fc, output_features=output_fc)
+
+    # the output should have been cleaned up
+    assert not arcpy.Exists(output_fc)

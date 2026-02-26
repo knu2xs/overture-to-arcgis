@@ -56,7 +56,6 @@ class Toolbox:
             AddWebsiteField,
             AddOvertureTaxonomyCodeFields,
             AddBooleanAccessRestrictionsFields,
-            AddSubclasses,
             SplitSegmentsIntoSubclassFeatures,
             RemoveRailFeatures,
             AddWalkRestrictionsColumn
@@ -525,35 +524,6 @@ class AddBooleanAccessRestrictionsFields:
         return
 
 
-class AddSubclasses:
-    """Tool to split features into subclass segments using subclass_rules."""
-    def __init__(self):
-        self.label = "Add Subclasses"
-        self.description = (
-            "Split features into subclass segments based on the 'subclass_rules' field. "
-            "Adds new features for each subclass segment and updates the 'subclass' field."
-        )
-        self.category = "Add Parsed Fields"
-
-    def getParameterInfo(self):
-        # Parameter for input feature layer
-        input_features = arcpy.Parameter(
-            displayName="Input Features",
-            name="input_features",
-            datatype="GPFeatureLayer",
-            parameterType="Required",
-            direction="Input"
-        )
-        params = [input_features]
-        return params
-
-    def execute(self, parameters, messages):
-        """Run the split_into_subclass_features function on the input features."""
-        input_features = parameters[0].valueAsText
-        overture_to_arcgis.utils.split_into_subclass_features(input_features)
-        return
- 
- 
 class SplitSegmentsIntoSubclassFeatures:
     """Tool to split segment features into subclass features based on subclass_rules."""
     def __init__(self):
@@ -580,7 +550,16 @@ class SplitSegmentsIntoSubclassFeatures:
         # filter to only line feature layers
         input_features.filter.list = ["Polyline"]
 
-        params = [input_features]
+        # optional output feature class
+        output_features = arcpy.Parameter(
+            displayName="Output Features",
+            name="output_features",
+            datatype="DEFeatureClass",
+            parameterType="Optional",
+            direction="Output"
+        )
+
+        params = [input_features, output_features]
 
         return params
 
@@ -602,9 +581,12 @@ class SplitSegmentsIntoSubclassFeatures:
 
         # retrieve input features from parameters
         input_features = parameters[0].valueAsText
+        output_features = parameters[1].valueAsText
 
         # split features into subclass features
-        overture_to_arcgis.utils.split_into_subclass_features(input_features)
+        overture_to_arcgis.utils.split_into_subclass_features(
+            input_features, output_features=output_features
+        )
 
         return
 
