@@ -35,7 +35,7 @@ slope_categories = {
     },
     7: {
         "description": r"20 to 25% grade",
-        "slope_range": (0.2, None),
+        "slope_range": (0.2, 0.25),
     },
     8: {
         "description": r"25 to 30% grade",
