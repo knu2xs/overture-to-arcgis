@@ -1,8 +1,7 @@
 from importlib.util import find_spec
 import json
 from pathlib import Path
-from cachetools import cachedmethod
-from geomet import wkb, esri
+from geomet import wkb
 import tempfile
 from typing import Optional, Tuple, Generator, Union
 import uuid
@@ -38,7 +37,17 @@ has_h3: bool = find_spec("h3") is not None
 
 
 def slugify(value: str) -> str:
-    """Convert a string to a slug format."""
+    """
+    Convert a string to a URL-friendly slug format.
+
+    Replaces periods and spaces with underscores and strips non-alphanumeric characters.
+
+    Args:
+        value: The string to slugify.
+
+    Returns:
+        Lowercased slug string containing only alphanumeric characters and underscores.
+    """
     value = value.lower()
     value = value.replace(".", "_")  # helps with decimals for maximum heights
     value = value.replace(" ", "_")
@@ -47,13 +56,23 @@ def slugify(value: str) -> str:
 
 
 def get_temp_dir() -> Path:
-    """Get a temporary directory path."""
+    """
+    Get the system temporary directory path.
+
+    Returns:
+        Path to the system temporary directory.
+    """
     temp_dir = Path(tempfile.gettempdir())
     return temp_dir
 
 
 def get_temp_gdb() -> Path:
-    """Get a temporary File Geodatabase path."""
+    """
+    Get a shared temporary file geodatabase, creating it if it does not exist.
+
+    Returns:
+        Path to the temporary file geodatabase.
+    """
     tmp_dir = get_temp_dir()
     tmp_gdb = tmp_dir / "tmp_data.gdb"
     if not tmp_gdb.exists():
@@ -89,7 +108,21 @@ def get_tmp_gdb() -> Path:
 def validate_bounding_box(
     bbox: tuple[float, float, float, float]
 ) -> tuple[float, float, float, float]:
-    """Validate the bounding box coordinates."""
+    """
+    Validate and normalize bounding box coordinates.
+
+    Ensures the bounding box has four numeric values within valid geographic
+    ranges and that min values are less than max values.
+
+    Args:
+        bbox: Tuple of (minx, miny, maxx, maxy) coordinates.
+
+    Returns:
+        Validated bounding box tuple with float values.
+
+    Raises:
+        ValueError: If the bounding box is malformed or out of range.
+    """
     # ensure four numeric values are provided
     if len(bbox) != 4:
         raise ValueError(
@@ -132,6 +165,9 @@ def get_release_list(s3: Optional[fs.S3FileSystem] = None) -> list[str]:
     Args:
         s3: Optional pre-configured S3 filesystem. If not provided, an anonymous
             S3 filesystem will be created.
+
+    Returns:
+        List of release version strings available on S3.
     """
     # create S3 filesystem if not provided
     if s3 is None:
@@ -194,6 +230,9 @@ def get_themes(
             release will be used.
         s3: Optional pre-configured S3 filesystem. If not provided, an anonymous
             S3 filesystem will be created.
+
+    Returns:
+        List of theme name strings for the specified release.
     """
     # if no release provided, get the most current one
     if release is None:
@@ -229,6 +268,12 @@ def get_type_theme_map(
 ) -> dict[str, str]:
     """
     Returns the mapping of overture types to themes.
+
+    Args:
+        release: Optional release version. If not provided, the most current
+            release will be used.
+        s3: Optional pre-configured S3 filesystem. If not provided, an anonymous
+            S3 filesystem will be created.
 
     Returns:
         Dictionary mapping overture types to themes.
@@ -338,7 +383,18 @@ def get_dataset_path(overture_type: str, release: Optional[str] = None) -> str:
 
 
 def convert_complex_columns_to_strings(table: pa.Table) -> pa.Table:
-    """Convert complex data type columns in a PyArrow table to strings."""
+    """
+    Convert complex data type columns in a PyArrow table to JSON strings.
+
+    Struct, list, and map columns are serialized to JSON string representations
+    while simple columns are left unchanged.
+
+    Args:
+        table: Input PyArrow table potentially containing complex column types.
+
+    Returns:
+        New PyArrow table with complex columns converted to string type.
+    """
     import json
 
     # list to hold new column values for converting back
@@ -411,10 +467,10 @@ def convert_wkb_column_to_arcgis_geometry(wkb_series: pd.Series) -> pd.Series:
         pandas Series of ArcGIS Geometry objects.
     """
 
-    def wkb_to_geometry(wkb_value):
+    def wkb_to_geometry(wkb_value) -> Optional[Geometry]:
         # if null value, return None
         if pd.isnull(wkb_value):
-            ret_geom = None
+            return None
 
         # otherwise, try to convert
         try:
@@ -422,14 +478,12 @@ def convert_wkb_column_to_arcgis_geometry(wkb_series: pd.Series) -> pd.Series:
             geojson = wkb.loads(wkb_value)
 
             # convert geojson to ArcGIS Geometry
-            ret_geom = Geometry(geojson)
+            return Geometry(geojson)
 
         # if any issues, log warning and return None
         except Exception as e:
             logger.warning(f"Failed to convert WKB to Geometry: {e}")
-            ret_geom = None
-
-        return ret_geom
+            return None
 
     # use the apply method to convert each WKB value to Geometry
     geom_series = wkb_series.apply(wkb_to_geometry)
@@ -610,7 +664,7 @@ def get_category_in_taxonomy(
     return taxonomy_code
 
 
-def get_overture_taxonomy_dataframe():
+def get_overture_taxonomy_dataframe() -> pd.DataFrame:
     """
     Retrieve the Overture categories taxonomy as a pandas DataFrame.
 

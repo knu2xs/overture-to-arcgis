@@ -171,11 +171,13 @@ def get_logger(
 
 
 def format_pandas_for_logging(
-    pandas_df: "pd.DataFrame", title: str, line_tab_prefix="\t\t"
+    pandas_df: "pd.DataFrame", title: str, line_tab_prefix: str = "\t\t"
 ) -> str:
     """
-    Helper function facilitating outputting a :class:`Pandas DataFrame<pandas.DataFrame>` into a logfile. This function only
-        formats the data frame into text for output. It should be used in conjunction with a logging method.
+    Format a Pandas DataFrame as an indented string suitable for log output.
+
+    This function only formats the DataFrame into text for output. It should be
+    used in conjunction with a logging method.
 
     ``` python
     logging.info(format_pandas_for_logging(df, title='Summary Statistics'))
@@ -184,7 +186,10 @@ def format_pandas_for_logging(
     Args:
         pandas_df: Pandas ``DataFrame`` to be converted to a string and included in the logfile.
         title: String title describing the data frame.
-        line_tab_prefix: Optional string comprised of tabs (``\\t\\t``) to prefix each line with providing indentation.
+        line_tab_prefix: String prefix (tabs) to indent each line with.
+
+    Returns:
+        Formatted string representation of the DataFrame.
     """
     import pandas as pd
 

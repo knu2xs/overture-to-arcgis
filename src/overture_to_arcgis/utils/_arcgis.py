@@ -74,7 +74,10 @@ def get_layers_for_unique_values(
 
 def add_primary_name(features: Union[arcpy._mp.Layer, str, Path]) -> None:
     """
-    Add a 'primary_name' field to the input features if it does not already exist, and calculate from
+    Add a 'primary_name' field to the input features and populate it from the 'names' column.
+
+    Parses the JSON-encoded 'names' field and extracts the first common name entry to
+    populate a new 'primary_name' text field.
 
     Args:
         features: The input feature layer or feature class.
@@ -581,14 +584,25 @@ def add_h3_indices(
     return
 
 
-def flatten_dict_to_bool_keys(dicts):
+def flatten_dict_to_bool_keys(dicts: Union[str, list[dict]]) -> dict[str, int]:
     """
-    Takes a list of dictionaries and returns a flat dictionary with boolean values (1) for each populated value.
-    Handles nested dictionaries and values that are strings or lists of strings.
+    Flatten a list of access-restriction dictionaries into boolean presence keys.
 
-    Example:
+    Takes a list of dictionaries (or a JSON string representation) and returns a flat
+    dictionary with integer ``1`` values for each populated nested key path.
+
+    ``` python
+    flatten_dict_to_bool_keys(
         [{'access_type': 'denied', 'when': {'heading': 'backward', 'mode': ['bicycle']}}]
-        -> {'access_denied_when_heading_backward': 1, 'access_denied_when_mode_bicycle': 1}
+    )
+    # {'access_denied_when_heading_backward': 1, 'access_denied_when_mode_bicycle': 1}
+    ```
+
+    Args:
+        dicts: A list of dictionaries or a JSON string to parse.
+
+    Returns:
+        Dictionary mapping flattened key paths to ``1`` for each populated value.
     """
     # if the input is a string, attempt to parse it to a dict or list of dicts - using eval since input may not be strict JSON
     if isinstance(dicts, str):
@@ -849,7 +863,7 @@ def split_into_subclass_features(features: Union[str, Path, arcpy._mp.Layer]) ->
     Args:
         features: The input feature layer or feature class.
 
-    warning !!!
+    !!! warning
         This function modifies the input features in place by adding new features and deleting the original ones.
     """
     # if features is a path, convert to string - arcpy cannot handle Path objects
@@ -1069,8 +1083,12 @@ def get_featureset_from_features(
 ) -> FeatureSet:
     """
     Convert an ArcPy feature layer or feature class to an ArcGIS FeatureSet.
+
     Args:
         features: The input feature layer or feature class.
+
+    Returns:
+        ArcGIS FeatureSet loaded from the input features.
     """
     # if features is a path, convert to string - arcpy cannot handle Path objects
     if isinstance(features, Path):

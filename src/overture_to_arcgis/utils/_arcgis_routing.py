@@ -1,5 +1,4 @@
 import os
-from importlib.util import find_spec
 from pathlib import Path
 from typing import Optional, Union
 
@@ -46,6 +45,9 @@ def add_restrictions_column(
     Args:
         edge_features: The input line feature layer or feature class.
         modality_prefix: The prefix for the restriction field.
+
+    Returns:
+        Path or layer reference to the updated edge features.
     """
     # if features is a path, convert to string - arcpy cannot handle Path objects
     if isinstance(edge_features, Path):
@@ -133,6 +135,9 @@ def create_network_dataset(
         feature_dataset_name: The name of the feature dataset to create the network dataset in.
         network_dataset_name: The name of the network dataset to create.
         travel_mode_name: The name of the travel mode to use for the network dataset.
+
+    Returns:
+        Path to the created network dataset.
     """
     # if features is a path, convert to string - arcpy cannot handle Path objects
     if isinstance(edge_features, Path):
