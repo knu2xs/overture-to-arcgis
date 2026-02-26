@@ -4,6 +4,7 @@ Pytest configuration file for arcgis-overture tests.
 It is used to set up fixtures and configurations for running tests, 
 especially when tests are spread acrsoss multiple files.
 """
+from typing import Generator
 import shutil
 import tempfile
 import uuid
@@ -51,7 +52,7 @@ def extent_small():
 
 
 @pytest.fixture(scope="function")
-def features_small_segments(tmp_gdb: Path, extent_small: tuple[float, float, float, float]):
+def features_small_segments(tmp_gdb: Path, extent_small: tuple[float, float, float, float]) -> Generator[Path, None, None]:
     """Provide a small set of test features for tests."""
     import arcpy
 
@@ -64,7 +65,7 @@ def features_small_segments(tmp_gdb: Path, extent_small: tuple[float, float, flo
     yield output_features
 
     # remove using arcpy to avoid schema locks
-    arcpy.Delete_management(fc_pth)
+    arcpy.Delete_management(str(fc_pth))
 
 
 @pytest.fixture(scope="function")
