@@ -57,6 +57,7 @@ class Toolbox:
             AddOvertureTaxonomyCodeFields,
             AddBooleanAccessRestrictionsFields,
             AddSubclasses,
+            SplitSegmentsIntoSubclassFeatures,
             RemoveRailFeatures,
             AddWalkRestrictionsColumn
         ]
@@ -553,6 +554,61 @@ class AddSubclasses:
         return
  
  
+class SplitSegmentsIntoSubclassFeatures:
+    """Tool to split segment features into subclass features based on subclass_rules."""
+    def __init__(self):
+        self.label = "Split Segments into Subclass Features"
+        self.description = (
+            "Split segment features into subsegments based on the 'subclass_rules' field. "
+            "For each rule, a new feature is created for the specified geometry fraction with "
+            "the 'subclass' field populated accordingly. Original features with splits are "
+            "replaced by the new subsegment features."
+        )
+        self.category = "Utilities"
+
+    def getParameterInfo(self):
+
+        # create a parameter to set the input feature layer
+        input_features = arcpy.Parameter(
+            displayName="Input Features",
+            name="input_features",
+            datatype="GPFeatureLayer",
+            parameterType="Required",
+            direction="Input"
+        )
+
+        # filter to only line feature layers
+        input_features.filter.list = ["Polyline"]
+
+        params = [input_features]
+
+        return params
+
+    def updateMessages(self, parameters):
+        """Validate that the input features contain the required 'subclass_rules' field."""
+        input_features = parameters[0]
+
+        if input_features.altered and input_features.value:
+            field_names = [f.name for f in arcpy.ListFields(input_features.valueAsText)]
+            if "subclass_rules" not in field_names:
+                input_features.setErrorMessage(
+                    "Input features must contain a 'subclass_rules' field."
+                )
+
+        return
+
+    def execute(self, parameters, messages):
+        """Split features into subclass subsegments using the subclass_rules field."""
+
+        # retrieve input features from parameters
+        input_features = parameters[0].valueAsText
+
+        # split features into subclass features
+        overture_to_arcgis.utils.split_into_subclass_features(input_features)
+
+        return
+
+
 class RemoveRailFeatures:
     """Remove rail features from a feature class."""
     def __init__(self):
