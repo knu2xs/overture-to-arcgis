@@ -1,5 +1,5 @@
 from ._logging import get_logger
-from .__main__ import (
+from ._core import (
     get_all_overture_types,
     get_current_release,
     get_temp_gdb,
@@ -50,5 +50,4 @@ __all__ = [
     "table_to_features",
     "table_to_spatially_enabled_dataframe",
     "validate_bounding_box",
-    "get_temp_gdb",
 ]

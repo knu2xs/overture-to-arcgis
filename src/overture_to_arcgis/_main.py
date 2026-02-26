@@ -8,7 +8,7 @@ from typing import Union
 import arcpy
 import pandas as pd
 
-from .utils.__main__ import convert_complex_columns_to_strings
+from .utils._core import convert_complex_columns_to_strings
 
 from .utils import (
     get_all_overture_types,

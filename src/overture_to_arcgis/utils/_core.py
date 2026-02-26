@@ -5,6 +5,7 @@ from cachetools import cachedmethod
 from geomet import wkb, esri
 import tempfile
 from typing import Optional, Tuple, Generator, Union
+import uuid
 from warnings import warn
 
 from arcgis.geometry import Geometry
@@ -18,7 +19,7 @@ from ._logging import get_logger
 
 # create a logger for this module
 logger = get_logger(
-    logger_name="overture_to_arcgis.utils.__main__",
+    logger_name="overture_to_arcgis.utils._core",
     level="DEBUG",
     add_stream_handler=False,
 )
@@ -63,6 +64,26 @@ def get_temp_gdb() -> Path:
         else:
             raise EnvironmentError("arcpy is required to create a File Geodatabase.")
     return tmp_gdb
+
+
+def get_tmp_gdb() -> Path:
+    """
+    Create a uniquely-named temporary file geodatabase.
+
+    !!! note
+        This is much more reliable than using ``arcpy.env.scratchGDB``, which can get corrupted.
+        Each call creates a new geodatabase with a UUID-based name.
+
+    Returns:
+        Path to the newly created file geodatabase.
+    """
+    import arcpy
+
+    gdb_pth = arcpy.management.CreateFileGDB(
+        tempfile.gettempdir(), out_name=f"tmp_{uuid.uuid4().hex}.gdb"
+    )[0]
+    gdb_pth = Path(gdb_pth)
+    return gdb_pth
 
 
 def validate_bounding_box(

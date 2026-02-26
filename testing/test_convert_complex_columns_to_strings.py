@@ -1,6 +1,6 @@
 import pyarrow as pa
 import json
-from overture_to_arcgis.utils.__main__ import convert_complex_columns_to_strings
+from overture_to_arcgis.utils._core import convert_complex_columns_to_strings
 
 
 def test_convert_complex_columns_to_strings():
