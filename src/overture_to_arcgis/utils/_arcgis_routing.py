@@ -6,57 +6,16 @@ from typing import Optional, Union
 import arcpy
 
 
-from .__main__ import slugify
+from ._core import slugify
 from ._logging import get_logger
 
 # configure module logging
 logger = get_logger(logger_name=Path(__file__).stem, level="DEBUG", add_stream_handler=False)
 
 
-# contsants
+# constants
 
-# restrictions for walking network routing
-RESTRICTIONS_WALK = {
-    'subtype': {
-        'rail': {
-            'avoid': 'high'
-        },
-        'water': {
-            'prohibited': 'true'
-        }
-    },
-    'class': {
-        'bridleway': {
-            'avoid': 'low'
-        },
-        'cycleway': {
-            'avoid': 'low'
-        },
-        'footway': {
-            'prefer': 'high'
-        },
-        'living_street': {
-            'prefer': 'medium'
-        },
-        'motorway': {
-            'avoid': 'high'
-        },
-        'path': {
-            'prefer': 'high',
-        },
-        'pedestrian': {
-            'prefer': 'high'
-        },
-        'primary': {
-            'avoid': 'high'
-        },
-        'secondary': {
-            'avoid': 'medium'
-        },
-    }
-}
-
-# restrictions for walking network routing
+# Restrictions for walking network routing — numeric impedance multipliers.
 # REF: https://pro.arcgis.com/en/pro-app/latest/help/analysis/networks/restriction-attributes.htm#GUID-662D8A4E-556B-4717-9DE2-F0734023C7CF
 RESTRICTIONS_WALK = {
     'subtype': {
