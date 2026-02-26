@@ -89,6 +89,8 @@ models/
 arcgis/Index
 arcgis/ImportLog
 arcgis/.backups
+arcgis/GpMessages/
+arcgis/update.lock
 
 # make sure the environment is not included
 env/
