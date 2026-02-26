@@ -23,50 +23,6 @@ from ._logging import get_logger
 logger = get_logger(logger_name=Path(__file__).stem, level="DEBUG", add_stream_handler=False)
 
 
-# contsants
-
-# restrictions for walking network routing
-RESTRICTIONS_WALK = {
-    'class': {
-        'rail': {
-            'avoid': 'high'
-        },
-        'water': {
-            'prohibited': True
-        }
-    },
-    'class': {
-        'bridleway': {
-            'avoid': 'low'
-        },
-        'cycleway': {
-            'avoid': 'low'
-        },
-        'footway': {
-            'prefer': 'high'
-        },
-        'living_street': {
-            'prefer': 'medium'
-        },
-        'motorway': {
-            'avoid': 'high'
-        },
-        'path': {
-            'prefer': 'high',
-        },
-        'pedestrian': {
-            'prefer': 'high'
-        },
-        'primary': {
-            'avoid': 'high'
-        },
-        'secondary': {
-            'avoid': 'medium'
-        },
-    }
-}
-
-
 def get_tmp_gdb() -> Path:
     """
     Create a temporary file geodatabase.
@@ -736,7 +692,7 @@ def get_boolean_access_restrictions(
     with arcpy.da.SearchCursor(features, [access_field]) as cursor:
         for row in cursor:
             if row[0] is not None and isinstance(row[0], str):
-                access_rest_dict = eval(row[0])
+                access_rest_dict = json.loads(row[0])
                 if isinstance(access_rest_dict, list):
                     access_restrictions.append(flatten_dict_to_bool_keys(row[0]))
 
