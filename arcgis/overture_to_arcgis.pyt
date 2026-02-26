@@ -57,7 +57,8 @@ class Toolbox:
             AddOvertureTaxonomyCodeFields,
             AddBooleanAccessRestrictionsFields,
             AddSubclasses,
-            RemoveRailFeatures
+            RemoveRailFeatures,
+            AddWalkRestrictionsColumn
         ]
 
         # add H3 index field tool only if h3 is available
@@ -586,4 +587,39 @@ class RemoveRailFeatures:
         overture_to_arcgis.utils.remove_rail_features(input_features)
 
         return
-    
+
+
+class AddWalkRestrictionsColumn:
+    """Tool to add walk restriction column to a feature class."""
+    def __init__(self):
+        self.label = "Add Walk Restrictions Column (Segments)"
+        self.description = (
+            "Add walk restrictions column to a feature class to using features for walk network routing."
+        )
+        self.category = "Add Parsed Fields"
+
+    def getParameterInfo(self):
+
+        # create a parameter to set the input feature layer
+        input_features = arcpy.Parameter(
+            displayName="Input Features",
+            name="input_features",
+            datatype="GPFeatureLayer",
+            parameterType="Required",
+            direction="Input"
+        )
+
+        params = [input_features]
+
+        return params
+
+    def execute(self, parameters, messages):
+        """The source code of the tool."""
+
+        # retrieve the data directory path from parameters
+        input_features = parameters[0].valueAsText
+
+        # add walk restriction column
+        overture_to_arcgis.utils.add_restrictions_column(input_features, modality_prefix="walk")
+
+        return
