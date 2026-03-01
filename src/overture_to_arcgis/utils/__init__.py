@@ -25,7 +25,7 @@ from ._arcgis_access import (
 )
 from ._arcgis_features import (
     get_layers_for_unique_values,
-    remove_rail_features,
+    split_into_level_features,
     split_into_subclass_features,
     split_segments_at_connectors,
 )
@@ -50,7 +50,7 @@ __all__ = [
     "get_record_batches",
     "get_release_list",
     "has_h3",
-    "remove_rail_features",
+    "split_into_level_features",
     "split_into_subclass_features",
     "split_segments_at_connectors",
     "table_to_features",
