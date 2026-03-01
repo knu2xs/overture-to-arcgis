@@ -58,7 +58,6 @@ class Toolbox:
             AddBooleanAccessRestrictionsFields,
             SplitSegmentsIntoSubclassFeatures,
             SplitSegmentsAtConnectors,
-            RemoveRailFeatures,
             AddWalkRestrictionsColumn
         ]
 
@@ -110,9 +109,73 @@ class GetOvertureFeatures:
         overture_type.filter.list = overture_to_arcgis.utils.get_all_overture_types()
         overture_type.value = "segment"
 
-        params = [extent, out_fc, overture_type]
+        # --- Post Processing parameters ---
+
+        # boolean to split segments at connector points
+        split_at_connectors = arcpy.Parameter(
+            displayName="Split at Connectors",
+            name="split_at_connectors",
+            datatype="GPBoolean",
+            parameterType="Optional",
+            direction="Input",
+            category="Post Processing"
+        )
+        split_at_connectors.value = False
+
+        # output feature class for connector features (required when split_at_connectors is True)
+        out_connector_fc = arcpy.Parameter(
+            displayName="Output Connector Features",
+            name="out_connector_fc",
+            datatype="DEFeatureClass",
+            parameterType="Optional",
+            direction="Output",
+            category="Post Processing"
+        )
+        out_connector_fc.enabled = False
+
+        # boolean to split segments into subsegments by subclass rules
+        split_into_subsegments = arcpy.Parameter(
+            displayName="Split into Subsegments",
+            name="split_into_subsegments",
+            datatype="GPBoolean",
+            parameterType="Optional",
+            direction="Input",
+            category="Post Processing"
+        )
+        split_into_subsegments.value = False
+
+        params = [extent, out_fc, overture_type, split_at_connectors, out_connector_fc, split_into_subsegments]
 
         return params
+
+    def updateParameters(self, parameters):
+        """Show post processing parameters only for segment type; enable connector output when splitting."""
+        overture_type = parameters[2]
+        split_at_connectors = parameters[3]
+        out_connector_fc = parameters[4]
+        split_into_subsegments = parameters[5]
+        
+        is_segment = overture_type.valueAsText == "segment"
+
+        # post processing options are only relevant for segment features
+        split_at_connectors.enabled = is_segment
+        split_into_subsegments.enabled = is_segment
+
+        if not is_segment:
+            split_at_connectors.value = False
+            split_into_subsegments.value = False
+            out_connector_fc.enabled = False
+            out_connector_fc.parameterType = "Optional"
+            out_connector_fc.value = None
+        elif split_at_connectors.value:
+            out_connector_fc.enabled = True
+            out_connector_fc.parameterType = "Required"
+        else:
+            out_connector_fc.enabled = False
+            out_connector_fc.parameterType = "Optional"
+            out_connector_fc.value = None
+
+        return
 
     def execute(self, parameters, messages):
         """The source code of the tool."""
@@ -121,7 +184,10 @@ class GetOvertureFeatures:
         extent_features = parameters[0].value
         out_fc = Path(parameters[1].valueAsText)
         overture_type = parameters[2].valueAsText
-
+        split_at_connectors = parameters[3].value
+        out_connector_fc = parameters[4].valueAsText
+        split_into_subsegments = parameters[5].value
+        
         # describe the extent features
         desc = arcpy.Describe(extent_features)
 
@@ -151,6 +217,31 @@ class GetOvertureFeatures:
 
         # delete features not intersecting the input extent features
         arcpy.management.DeleteFeatures(ovm_lyr)
+
+        # --- Post Processing ---
+
+        # split segments at connector points if requested
+        if split_at_connectors:
+            # download connector features for the same extent
+            logger.info(f"Retrieving 'connector' features for extent: {bbox}.")
+            out_connector_fc_path = Path(out_connector_fc)
+            overture_to_arcgis.get_features(out_connector_fc_path, bbox=bbox, overture_type="connector")
+
+            # clip connector features to the input extent
+            conn_lyr = arcpy.management.MakeFeatureLayer(str(out_connector_fc_path))[0]
+            arcpy.management.SelectLayerByLocation(
+                conn_lyr, "INTERSECT", ext_lyr,
+                selection_type="NEW_SELECTION", invert_spatial_relationship=True
+            )
+            arcpy.management.DeleteFeatures(conn_lyr)
+
+            logger.info("Splitting segments at connector points.")
+            overture_to_arcgis.utils.split_segments_at_connectors(str(out_fc))
+
+        # split segments into subsegments by subclass rules if requested
+        if split_into_subsegments:
+            logger.info("Splitting segments into subsegments by subclass rules.")
+            overture_to_arcgis.utils.split_into_subclass_features(str(out_fc))
 
         return out_fc
 
@@ -655,42 +746,6 @@ class SplitSegmentsAtConnectors:
         overture_to_arcgis.utils.split_segments_at_connectors(
             input_features, output_features=output_features
         )
-
-        return
-
-
-class RemoveRailFeatures:
-    """Remove rail features from a feature class."""
-    def __init__(self):
-        self.label = "Remove Rail Features"
-        self.description = (
-            "Remove features classified as 'rail' from a feature class."
-        )
-        self.category = "Utilities"
-
-    def getParameterInfo(self):
-
-        # create a parameter to set the input feature layer
-        input_features = arcpy.Parameter(
-            displayName="Input Features",
-            name="input_features",
-            datatype="GPFeatureLayer",
-            parameterType="Required",
-            direction="Input"
-        )
-
-        params = [input_features]
-
-        return params
-
-    def execute(self, parameters, messages):
-        """The source code of the tool."""
-
-        # retrieve the data directory path from parameters
-        input_features = parameters[0].valueAsText
-
-        # remove rail features
-        overture_to_arcgis.utils.remove_rail_features(input_features)
 
         return
 
