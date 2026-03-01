@@ -57,6 +57,7 @@ class Toolbox:
             AddOvertureTaxonomyCodeFields,
             AddBooleanAccessRestrictionsFields,
             SplitSegmentsIntoSubclassFeatures,
+            SplitSegmentsIntoLevelFeatures,
             SplitSegmentsAtConnectors,
             AddWalkRestrictionsColumn
         ]
@@ -144,26 +145,64 @@ class GetOvertureFeatures:
         )
         split_into_subsegments.value = False
 
-        params = [extent, out_fc, overture_type, split_at_connectors, out_connector_fc, split_into_subsegments]
+        # boolean to split segments into subsegments by level rules
+        split_into_levels = arcpy.Parameter(
+            displayName="Split into Levels",
+            name="split_into_levels",
+            datatype="GPBoolean",
+            parameterType="Optional",
+            direction="Input",
+            category="Post Processing"
+        )
+        split_into_levels.value = False
+
+        # boolean to add a primary_name field parsed from the names column
+        add_primary_name = arcpy.Parameter(
+            displayName="Add Primary Name",
+            name="add_primary_name",
+            datatype="GPBoolean",
+            parameterType="Optional",
+            direction="Input",
+            category="Post Processing"
+        )
+        add_primary_name.value = False
+
+        # boolean to add a primary_category field parsed from the categories column
+        add_primary_category = arcpy.Parameter(
+            displayName="Add Primary Category",
+            name="add_primary_category",
+            datatype="GPBoolean",
+            parameterType="Optional",
+            direction="Input",
+            category="Post Processing"
+        )
+        add_primary_category.value = False
+
+        params = [extent, out_fc, overture_type, split_at_connectors, out_connector_fc, split_into_subsegments, split_into_levels, add_primary_name, add_primary_category]
 
         return params
 
     def updateParameters(self, parameters):
-        """Show post processing parameters only for segment type; enable connector output when splitting."""
+        """Show post processing parameters only for applicable types; enable connector output when splitting."""
         overture_type = parameters[2]
         split_at_connectors = parameters[3]
         out_connector_fc = parameters[4]
         split_into_subsegments = parameters[5]
+        split_into_levels = parameters[6]
+        add_primary_name = parameters[7]
+        add_primary_category = parameters[8]
         
         is_segment = overture_type.valueAsText == "segment"
 
-        # post processing options are only relevant for segment features
+        # segment-only post processing options
         split_at_connectors.enabled = is_segment
         split_into_subsegments.enabled = is_segment
+        split_into_levels.enabled = is_segment
 
         if not is_segment:
             split_at_connectors.value = False
             split_into_subsegments.value = False
+            split_into_levels.value = False
             out_connector_fc.enabled = False
             out_connector_fc.parameterType = "Optional"
             out_connector_fc.value = None
@@ -174,6 +213,9 @@ class GetOvertureFeatures:
             out_connector_fc.enabled = False
             out_connector_fc.parameterType = "Optional"
             out_connector_fc.value = None
+
+        # primary name and primary category are available for all types
+        # (the underlying functions validate required source fields)
 
         return
 
@@ -187,6 +229,9 @@ class GetOvertureFeatures:
         split_at_connectors = parameters[3].value
         out_connector_fc = parameters[4].valueAsText
         split_into_subsegments = parameters[5].value
+        split_into_levels = parameters[6].value
+        add_primary_name = parameters[7].value
+        add_primary_category = parameters[8].value
         
         # describe the extent features
         desc = arcpy.Describe(extent_features)
@@ -242,6 +287,21 @@ class GetOvertureFeatures:
         if split_into_subsegments:
             logger.info("Splitting segments into subsegments by subclass rules.")
             overture_to_arcgis.utils.split_into_subclass_features(str(out_fc))
+
+        # split segments into subsegments by level rules if requested
+        if split_into_levels:
+            logger.info("Splitting segments into level features by level rules.")
+            overture_to_arcgis.utils.split_into_level_features(str(out_fc))
+
+        # add primary name field if requested
+        if add_primary_name:
+            logger.info("Adding primary_name field from names column.")
+            overture_to_arcgis.utils.add_primary_name(str(out_fc))
+
+        # add primary category field if requested
+        if add_primary_category:
+            logger.info("Adding primary_category field from categories column.")
+            overture_to_arcgis.utils.add_primary_category_field(str(out_fc))
 
         return out_fc
 
@@ -744,6 +804,73 @@ class SplitSegmentsAtConnectors:
 
         # split segments at connector points
         overture_to_arcgis.utils.split_segments_at_connectors(
+            input_features, output_features=output_features
+        )
+
+        return
+
+
+class SplitSegmentsIntoLevelFeatures:
+    """Tool to split segment features into level features based on level_rules."""
+    def __init__(self):
+        self.label = "Split Segments into Level Features"
+        self.description = (
+            "Split segment features into subsegments based on the 'level_rules' field. "
+            "For each rule, a new feature is created for the specified geometry fraction with "
+            "the 'z_index' field populated with the integer level value. Original features "
+            "with splits are replaced by the new level-based subsegment features."
+        )
+        self.category = "Utilities"
+
+    def getParameterInfo(self):
+
+        # create a parameter to set the input feature layer
+        input_features = arcpy.Parameter(
+            displayName="Input Features",
+            name="input_features",
+            datatype="GPFeatureLayer",
+            parameterType="Required",
+            direction="Input"
+        )
+
+        # filter to only line feature layers
+        input_features.filter.list = ["Polyline"]
+
+        # optional output feature class
+        output_features = arcpy.Parameter(
+            displayName="Output Features",
+            name="output_features",
+            datatype="DEFeatureClass",
+            parameterType="Optional",
+            direction="Output"
+        )
+
+        params = [input_features, output_features]
+
+        return params
+
+    def updateMessages(self, parameters):
+        """Validate that the input features contain the required 'level_rules' field."""
+        input_features = parameters[0]
+
+        if input_features.altered and input_features.value:
+            field_names = [f.name for f in arcpy.ListFields(input_features.valueAsText)]
+            if "level_rules" not in field_names:
+                input_features.setErrorMessage(
+                    "Input features must contain a 'level_rules' field."
+                )
+
+        return
+
+    def execute(self, parameters, messages):
+        """Split features into level subsegments using the level_rules field."""
+
+        # retrieve input features from parameters
+        input_features = parameters[0].valueAsText
+        output_features = parameters[1].valueAsText
+
+        # split features into level features
+        overture_to_arcgis.utils.split_into_level_features(
             input_features, output_features=output_features
         )
 
