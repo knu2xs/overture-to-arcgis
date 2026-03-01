@@ -86,7 +86,7 @@ def _chain_sub_segments(
     point of one segment to the start point of the next.
 
     Args:
-        members: A list of ``(OID, geometry)`` tuples to chain.
+        members: A list of `(OID, geometry)` tuples to chain.
 
     Returns:
         The input tuples reordered so that each segment's end point
@@ -139,20 +139,20 @@ def _build_segment_map(
     between_rules: list[dict],
 ) -> list[tuple[float, float, Optional[str]]]:
     """
-    Build a segment map covering ``[0.0, 1.0]`` from sorted subclass rules.
+    Build a segment map covering `[0.0, 1.0]` from sorted subclass rules.
 
     Gaps between rules and leading/trailing gaps are filled with
-    ``(start, end, None)`` entries so the returned list forms a
-    contiguous partition of ``[0.0, 1.0]``.
+    `(start, end, None)` entries so the returned list forms a
+    contiguous partition of `[0.0, 1.0]`.
 
     Args:
         between_rules: Subclass rules **already sorted** by start
-            fraction.  Each dict must have ``"value"`` and ``"between"``
+            fraction.  Each dict must have `"value"` and `"between"`
             keys.
 
     Returns:
-        A list of ``(start_frac, end_frac, value)`` tuples covering
-        the full ``[0.0, 1.0]`` range.
+        A list of `(start_frac, end_frac, value)` tuples covering
+        the full `[0.0, 1.0]` range.
     """
     segments: list[tuple[float, float, Optional[str]]] = []
     prev_end = 0.0
@@ -175,15 +175,15 @@ def _get_overlapping_pieces(
     tolerance: float = 1e-9,
 ) -> list[tuple[float, float, Optional[str]]]:
     """
-    Return portions of *segment_map* overlapping ``[feat_start, feat_end]``.
+    Return portions of *segment_map* overlapping `[feat_start, feat_end]`.
 
     Each returned tuple is clamped to the feature's range.  Overlaps
     smaller than *tolerance* are discarded to avoid negligible sliver
     segments caused by floating-point imprecision.
 
     Args:
-        segment_map: Full ``[0.0, 1.0]`` segment map produced by
-            :func:`_build_segment_map`.
+        segment_map: Full `[0.0, 1.0]` segment map produced by
+            [_build_segment_map][].
         feat_start: Start fraction of the feature within the original
             segment.
         feat_end: End fraction of the feature within the original
@@ -191,7 +191,7 @@ def _get_overlapping_pieces(
         tolerance: Minimum overlap width to keep.
 
     Returns:
-        A list of ``(clamped_start, clamped_end, value)`` tuples.
+        A list of `(clamped_start, clamped_end, value)` tuples.
     """
     pieces: list[tuple[float, float, Optional[str]]] = []
     for seg_start, seg_end, value in segment_map:
@@ -207,12 +207,28 @@ def split_into_subclass_features(
     output_features: Optional[Union[str, Path]] = None,
 ) -> Optional[str]:
     """
-    Split features into subsegments based on the definition in the 'subclass_rules' field.
+    Split features into subsegments based on the definition in the `subclass_rules` field.
 
     When `output_features` is provided the input data is first copied to the
     specified location and the split is performed on the copy.  If the process
     fails, the newly created output dataset is deleted so the caller never sees
     a half-processed result.
+
+    !!! note
+        Any gaps between rules (leading, interior, or trailing) are filled
+        with segments that retain the original feature's properties but have
+        a `None` subsegment value.
+
+    !!! note
+        When features share the same `id` value (e.g. after being split
+        by [split_segments_at_connectors][]), the `between`
+        fractions are evaluated relative to the combined original
+        geometry rather than each individual sub-segment.
+
+    !!! warning
+        When `output_features` is *not* provided this function modifies
+        the input features in place by adding new features and deleting the
+        original ones.
 
     ``` python
     # Example subclass_rules values:
@@ -230,17 +246,6 @@ def split_into_subclass_features(
     #       no subsegment)
     ```
 
-    !!! note
-        Any gaps between rules (leading, interior, or trailing) are filled
-        with segments that retain the original feature's properties but have
-        a ``None`` subsegment value.
-
-    !!! note
-        When features share the same ``id`` value (e.g. after being split
-        by :func:`split_segments_at_connectors`), the ``between``
-        fractions are evaluated relative to the combined original
-        geometry rather than each individual sub-segment.
-
     Args:
         features: The input feature layer or feature class.
         output_features: Optional path to an output feature class.  When
@@ -249,15 +254,10 @@ def split_into_subclass_features(
 
     Returns:
         The path to the output feature class when `output_features` is
-        provided, otherwise ``None`` (in-place modification).
+        provided, otherwise `None` (in-place modification).
 
     Raises:
-        ValueError: If the required ``subclass_rules`` field is missing.
-
-    !!! warning
-        When `output_features` is *not* provided this function modifies
-        the input features in place by adding new features and deleting the
-        original ones.
+        ValueError: If the required `subclass_rules` field is missing.
     """
     # if features is a path, convert to string - arcpy cannot handle Path objects
     if isinstance(features, Path):
@@ -541,18 +541,34 @@ def split_into_level_features(
     output_features: Optional[Union[str, Path]] = None,
 ) -> Optional[str]:
     """
-    Split features into subsegments based on the ``level_rules`` field and populate a ``z_index`` field.
+    Split features into subsegments based on the `level_rules` field and populate a `z_index` field.
 
-    The ``level_rules`` field uses the same structure as ``subclass_rules``:
-    a JSON array of objects, each with an integer ``value`` (the vertical
-    level / z-index) and an optional ``between`` pair of fractions
-    ``[start, end]`` describing which portion of the geometry the value
+    The `level_rules` field uses the same structure as `subclass_rules`:
+    a JSON array of objects, each with an integer `value` (the vertical
+    level / z-index) and an optional `between` pair of fractions
+    `[start, end]` describing which portion of the geometry the value
     applies to.
 
-    When ``output_features`` is provided the input data is first copied to
+    When `output_features` is provided the input data is first copied to
     the specified location and the split is performed on the copy.  If the
     process fails, the newly created output dataset is deleted so the
     caller never sees a half-processed result.
+
+    !!! note
+        Any gaps between rules (leading, interior, or trailing) are filled
+        with segments that retain the original feature's properties but have
+        a `None` z_index value.
+
+    !!! note
+        When features share the same `id` value (e.g. after being split
+        by [split_segments_at_connectors][]), the `between`
+        fractions are evaluated relative to the combined original
+        geometry rather than each individual sub-segment.
+
+    !!! warning
+        When `output_features` is *not* provided this function modifies
+        the input features in place by adding new features and deleting the
+        original ones.
 
     ``` python
     # Example level_rules values:
@@ -565,17 +581,6 @@ def split_into_level_features(
     #       70-100% z_index=1
     ```
 
-    !!! note
-        Any gaps between rules (leading, interior, or trailing) are filled
-        with segments that retain the original feature's properties but have
-        a ``None`` z_index value.
-
-    !!! note
-        When features share the same ``id`` value (e.g. after being split
-        by :func:`split_segments_at_connectors`), the ``between``
-        fractions are evaluated relative to the combined original
-        geometry rather than each individual sub-segment.
-
     Args:
         features: The input feature layer or feature class.
         output_features: Optional path to an output feature class.  When
@@ -583,16 +588,11 @@ def split_into_level_features(
             and the original data is left untouched.
 
     Returns:
-        The path to the output feature class when ``output_features`` is
-        provided, otherwise ``None`` (in-place modification).
+        The path to the output feature class when `output_features` is
+        provided, otherwise `None` (in-place modification).
 
     Raises:
-        ValueError: If the required ``level_rules`` field is missing.
-
-    !!! warning
-        When ``output_features`` is *not* provided this function modifies
-        the input features in place by adding new features and deleting the
-        original ones.
+        ValueError: If the required `level_rules` field is missing.
     """
     # if features is a path, convert to string - arcpy cannot handle Path objects
     if isinstance(features, Path):
@@ -904,6 +904,16 @@ def split_segments_at_connectors(
     If the process fails, the newly created output dataset is deleted so
     the caller never sees a half-processed result.
 
+    !!! note
+        Features whose `connectors` field is *null*, empty, unparseable,
+        or contains fewer than three connector entries (i.e. only start and
+        end) are left untouched because no interior split is required.
+
+    !!! warning
+        When `output_features` is *not* provided this function modifies
+        the input features in place by inserting new sub-segment features
+        and deleting the originals that were split.
+
     ``` python
     # Example connectors values:
     # [{"connector_id": "abc", "at": 0.0}, {"connector_id": "def", "at": 1.0}]
@@ -912,11 +922,6 @@ def split_segments_at_connectors(
     #  {"connector_id": "def", "at": 1.0}]
     #    -> two features: 0–40% and 40–100% of the original geometry
     ```
-
-    !!! note
-        Features whose `connectors` field is *null*, empty, unparseable,
-        or contains fewer than three connector entries (i.e. only start and
-        end) are left untouched because no interior split is required.
 
     Args:
         features: The input feature layer or feature class containing
@@ -931,11 +936,6 @@ def split_segments_at_connectors(
 
     Raises:
         ValueError: If the required `connectors` field is missing.
-
-    !!! warning
-        When `output_features` is *not* provided this function modifies
-        the input features in place by inserting new sub-segment features
-        and deleting the originals that were split.
     """
     # if features is a path, convert to string - arcpy cannot handle Path objects
     if isinstance(features, Path):
