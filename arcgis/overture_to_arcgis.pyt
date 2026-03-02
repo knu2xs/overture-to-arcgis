@@ -27,11 +27,10 @@ def find_pkg_source(package_name) -> Path:
     return None
 
 
-# account for using relative path to package
-if importlib.util.find_spec("overture_to_arcgis") is None:
-    src_dir = find_pkg_source("overture_to_arcgis")
-    if src_dir is not None:
-        sys.path.append(str(src_dir))
+# always prefer local source so the PYT uses the latest code during development
+src_dir = find_pkg_source("overture_to_arcgis")
+if src_dir is not None:
+    sys.path.insert(0, str(src_dir))
 
 # include custom code
 import overture_to_arcgis
@@ -112,6 +111,28 @@ class GetOvertureFeatures:
 
         # --- Post Processing parameters ---
 
+        # boolean to add a primary_name field parsed from the names column
+        add_primary_name = arcpy.Parameter(
+            displayName="Add Primary Name",
+            name="add_primary_name",
+            datatype="GPBoolean",
+            parameterType="Optional",
+            direction="Input",
+            category="Post Processing"
+        )
+        add_primary_name.value = False
+
+        # boolean to add a primary_category field parsed from the categories column
+        add_primary_category = arcpy.Parameter(
+            displayName="Add Primary Category",
+            name="add_primary_category",
+            datatype="GPBoolean",
+            parameterType="Optional",
+            direction="Input",
+            category="Post Processing"
+        )
+        add_primary_category.value = False
+
         # boolean to split segments at connector points
         split_at_connectors = arcpy.Parameter(
             displayName="Split at Connectors",
@@ -156,45 +177,45 @@ class GetOvertureFeatures:
         )
         split_into_levels.value = False
 
-        # boolean to add a primary_name field parsed from the names column
-        add_primary_name = arcpy.Parameter(
-            displayName="Add Primary Name",
-            name="add_primary_name",
-            datatype="GPBoolean",
-            parameterType="Optional",
-            direction="Input",
-            category="Post Processing"
-        )
-        add_primary_name.value = False
-
-        # boolean to add a primary_category field parsed from the categories column
-        add_primary_category = arcpy.Parameter(
-            displayName="Add Primary Category",
-            name="add_primary_category",
-            datatype="GPBoolean",
-            parameterType="Optional",
-            direction="Input",
-            category="Post Processing"
-        )
-        add_primary_category.value = False
-
-        params = [extent, out_fc, overture_type, split_at_connectors, out_connector_fc, split_into_subsegments, split_into_levels, add_primary_name, add_primary_category]
+        params = [extent, out_fc, overture_type, add_primary_name, add_primary_category, split_at_connectors, out_connector_fc, split_into_subsegments, split_into_levels]
 
         return params
+
+    # Overture types whose schema includes a 'names' field
+    _TYPES_WITH_NAMES = {
+        "building", "building_part", "division", "division_area",
+        "infrastructure", "land", "land_use", "place", "segment", "water",
+    }
+
+    # Overture types whose schema includes a 'categories' field
+    _TYPES_WITH_CATEGORIES = {"place"}
 
     def updateParameters(self, parameters):
         """Show post processing parameters only for applicable types; enable connector output when splitting."""
         overture_type = parameters[2]
-        split_at_connectors = parameters[3]
-        out_connector_fc = parameters[4]
-        split_into_subsegments = parameters[5]
-        split_into_levels = parameters[6]
-        add_primary_name = parameters[7]
-        add_primary_category = parameters[8]
-        
-        is_segment = overture_type.valueAsText == "segment"
+        add_primary_name = parameters[3]
+        add_primary_category = parameters[4]
+        split_at_connectors = parameters[5]
+        out_connector_fc = parameters[6]
+        split_into_subsegments = parameters[7]
+        split_into_levels = parameters[8]
 
-        # segment-only post processing options
+        selected_type = overture_type.valueAsText
+        is_segment = selected_type == "segment"
+
+        # --- primary name: only for types with a 'names' field ---
+        has_names = selected_type in self._TYPES_WITH_NAMES
+        add_primary_name.enabled = has_names
+        if not has_names:
+            add_primary_name.value = False
+
+        # --- primary category: only for types with a 'categories' field ---
+        has_categories = selected_type in self._TYPES_WITH_CATEGORIES
+        add_primary_category.enabled = has_categories
+        if not has_categories:
+            add_primary_category.value = False
+
+        # --- segment-only post processing options ---
         split_at_connectors.enabled = is_segment
         split_into_subsegments.enabled = is_segment
         split_into_levels.enabled = is_segment
@@ -214,9 +235,6 @@ class GetOvertureFeatures:
             out_connector_fc.parameterType = "Optional"
             out_connector_fc.value = None
 
-        # primary name and primary category are available for all types
-        # (the underlying functions validate required source fields)
-
         return
 
     def execute(self, parameters, messages):
@@ -226,12 +244,12 @@ class GetOvertureFeatures:
         extent_features = parameters[0].value
         out_fc = Path(parameters[1].valueAsText)
         overture_type = parameters[2].valueAsText
-        split_at_connectors = parameters[3].value
-        out_connector_fc = parameters[4].valueAsText
-        split_into_subsegments = parameters[5].value
-        split_into_levels = parameters[6].value
-        add_primary_name = parameters[7].value
-        add_primary_category = parameters[8].value
+        add_primary_name = parameters[3].value
+        add_primary_category = parameters[4].value
+        split_at_connectors = parameters[5].value
+        out_connector_fc = parameters[6].valueAsText
+        split_into_subsegments = parameters[7].value
+        split_into_levels = parameters[8].value
         
         # describe the extent features
         desc = arcpy.Describe(extent_features)
@@ -295,13 +313,21 @@ class GetOvertureFeatures:
 
         # add primary name field if requested
         if add_primary_name:
-            logger.info("Adding primary_name field from names column.")
-            overture_to_arcgis.utils.add_primary_name(str(out_fc))
+            field_names = [f.name for f in arcpy.ListFields(str(out_fc))]
+            if "names" in field_names:
+                logger.info("Adding primary_name field from names column.")
+                overture_to_arcgis.utils.add_primary_name(str(out_fc))
+            else:
+                logger.warning("Skipping primary_name — 'names' field not found in features.")
 
         # add primary category field if requested
         if add_primary_category:
-            logger.info("Adding primary_category field from categories column.")
-            overture_to_arcgis.utils.add_primary_category_field(str(out_fc))
+            field_names = [f.name for f in arcpy.ListFields(str(out_fc))]
+            if "categories" in field_names:
+                logger.info("Adding primary_category field from categories column.")
+                overture_to_arcgis.utils.add_primary_category_field(str(out_fc))
+            else:
+                logger.warning("Skipping primary_category — 'categories' field not found in features.")
 
         return out_fc
 
