@@ -230,6 +230,11 @@ class GetOvertureFeatures:
         elif split_at_connectors.value:
             out_connector_fc.enabled = True
             out_connector_fc.parameterType = "Required"
+            # Auto-populate with same GDB as output features, named "connectors"
+            out_fc = parameters[1]
+            if out_fc.valueAsText and not out_connector_fc.altered:
+                out_fc_path = Path(out_fc.valueAsText)
+                out_connector_fc.value = str(out_fc_path.parent / "connectors")
         else:
             out_connector_fc.enabled = False
             out_connector_fc.parameterType = "Optional"
