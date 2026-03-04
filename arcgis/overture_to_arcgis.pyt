@@ -319,7 +319,9 @@ class GetOvertureFeatures:
             arcpy.management.DeleteFeatures(conn_lyr)
 
             logger.info("Splitting segments at connector points.")
-            overture_to_arcgis.utils.split_segments_at_connectors(str(out_fc))
+            overture_to_arcgis.utils.split_segments_at_connectors(
+                str(out_fc), connector_features=str(out_connector_fc_path)
+            )
 
         # split segments into subsegments by subclass rules if requested
         if split_into_subsegments:
@@ -820,6 +822,18 @@ class SplitSegmentsAtConnectors:
         # filter to only line feature layers
         input_features.filter.list = ["Polyline"]
 
+        # connector point features
+        connector_features = arcpy.Parameter(
+            displayName="Connector Features",
+            name="connector_features",
+            datatype="GPFeatureLayer",
+            parameterType="Required",
+            direction="Input"
+        )
+
+        # filter to only point feature layers
+        connector_features.filter.list = ["Point"]
+
         # optional output feature class
         output_features = arcpy.Parameter(
             displayName="Output Features",
@@ -829,19 +843,27 @@ class SplitSegmentsAtConnectors:
             direction="Output"
         )
 
-        params = [input_features, output_features]
+        params = [input_features, connector_features, output_features]
 
         return params
 
     def updateMessages(self, parameters):
-        """Validate that the input features contain the required 'connectors' field."""
+        """Validate that the input features contain the required fields."""
         input_features = parameters[0]
+        connector_features = parameters[1]
 
         if input_features.altered and input_features.value:
             field_names = [f.name for f in arcpy.ListFields(input_features.valueAsText)]
             if "connectors" not in field_names:
                 input_features.setErrorMessage(
                     "Input features must contain a 'connectors' field."
+                )
+
+        if connector_features.altered and connector_features.value:
+            field_names = [f.name for f in arcpy.ListFields(connector_features.valueAsText)]
+            if "id" not in field_names:
+                connector_features.setErrorMessage(
+                    "Connector features must contain an 'id' field."
                 )
 
         return
@@ -851,11 +873,14 @@ class SplitSegmentsAtConnectors:
 
         # retrieve input features from parameters
         input_features = parameters[0].valueAsText
-        output_features = parameters[1].valueAsText
+        connector_features = parameters[1].valueAsText
+        output_features = parameters[2].valueAsText
 
         # split segments at connector points
         overture_to_arcgis.utils.split_segments_at_connectors(
-            input_features, output_features=output_features
+            input_features,
+            connector_features=connector_features,
+            output_features=output_features,
         )
 
         return

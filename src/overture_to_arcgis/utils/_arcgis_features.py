@@ -912,21 +912,23 @@ def split_into_level_features(
 
 def split_segments_at_connectors(
     features: Union[str, Path, arcpy._mp.Layer],
+    connector_features: Union[str, Path, arcpy._mp.Layer],
     output_features: Optional[Union[str, Path]] = None,
+    search_radius: str = "10 Meters",
 ) -> Optional[str]:
     """
-    Split segment polylines at connector points defined in the `connectors` field.
+    Split segment polylines at connector point geometries listed in the `connectors` field.
 
-    In the Overture Maps transportation schema each segment carries a
-    `connectors` field containing a JSON array of objects.  Each object
-    has a `connector_id` (the Overture ID of the connecting node) and an
-    `at` value representing a fraction (0.0 – 1.0) along the segment
-    geometry where the connector is located.
+    For each segment, the `connectors` JSON field is parsed to obtain the
+    list of `connector_id` values.  The corresponding point geometries are
+    looked up from `connector_features` and their positions along the
+    segment are computed using `queryPointAndDistance`.  The segment is
+    then split into sub-segments between consecutive connector positions
+    using `segmentAlongLine`.
 
-    This function reads those fractions, sorts them, and produces one new
-    polyline feature for every pair of consecutive connector positions.
-    Attributes from the original feature are copied to each resulting
-    sub-segment.
+    Only connector points explicitly referenced in a segment's
+    `connectors` field are used to split that segment, ensuring unrelated
+    nearby connectors do not interfere.
 
     When `output_features` is provided the input data is first copied to
     the specified location and all processing is performed on the copy.
@@ -935,8 +937,13 @@ def split_segments_at_connectors(
 
     !!! note
         Features whose `connectors` field is *null*, empty, unparseable,
-        or contains fewer than three connector entries (i.e. only start and
-        end) are left untouched because no interior split is required.
+        or references fewer than three connector points (i.e. only start
+        and end) are left untouched because no interior split is required.
+
+    !!! note
+        Connector points are snapped to the nearest position on the
+        segment polyline.  Points farther than `search_radius` from
+        any listed segment are logged as warnings and skipped.
 
     !!! warning
         When `output_features` is *not* provided this function modifies
@@ -946,25 +953,35 @@ def split_segments_at_connectors(
     ``` python
     # Example connectors values:
     # [{"connector_id": "abc", "at": 0.0}, {"connector_id": "def", "at": 1.0}]
-    #    -> no split needed (start to end)
+    #    -> no split needed (start and end only)
     # [{"connector_id": "abc", "at": 0.0}, {"connector_id": "mid", "at": 0.4},
     #  {"connector_id": "def", "at": 1.0}]
-    #    -> two features: 0–40% and 40–100% of the original geometry
+    #    -> two features split at the "mid" connector point location
     ```
 
     Args:
         features: The input feature layer or feature class containing
             Overture segment polylines.
+        connector_features: A point feature layer or feature class
+            containing Overture connector geometries.  Must have an
+            `id` field matching the `connector_id` values stored in
+            each segment's `connectors` JSON.
         output_features: Optional path to an output feature class.  When
             supplied, the input features are copied here before splitting
             and the original data is left untouched.
+        search_radius: Maximum distance a connector point may be from a
+            segment to be considered valid.  Points farther away are
+            skipped with a warning.  Accepts any linear unit string
+            recognised by arcpy (e.g. ``"10 Meters"``).
 
     Returns:
         The path to the output feature class when `output_features` is
         provided, otherwise `None` (in-place modification).
 
     Raises:
-        ValueError: If the required `connectors` field is missing.
+        ValueError: If the required `connectors` field is missing from
+            `features` or the required `id` field is missing from
+            `connector_features`.
     """
     # if features is a path, convert to string - arcpy cannot handle Path objects
     if isinstance(features, Path):
@@ -973,6 +990,16 @@ def split_segments_at_connectors(
     # resolve to catalog path when a layer is provided to avoid schema locks
     if isinstance(features, arcpy._mp.Layer):
         features = arcpy.Describe(features).catalogPath
+
+    # normalise connector_features to a string path
+    if isinstance(connector_features, Path):
+        connector_features = str(connector_features)
+    if isinstance(connector_features, arcpy._mp.Layer):
+        connector_features = arcpy.Describe(connector_features).catalogPath
+
+    # parse the search_radius into a linear unit value for distance comparison
+    radius_parts = search_radius.strip().split()
+    radius_value = float(radius_parts[0])
 
     # ------------------------------------------------------------------
     # If an output location was requested, copy the features there first
@@ -1011,7 +1038,36 @@ def split_segments_at_connectors(
             f"This is necessary to split segments at connector points."
         )
 
+    # validate connector_features has an 'id' field
+    conn_field_names = [f.name for f in arcpy.ListFields(connector_features)]
+    if "id" not in conn_field_names:
+        if output_features is not None and arcpy.Exists(output_features):
+            arcpy.management.Delete(output_features)
+            logger.debug(
+                "Rolled back output feature class after connector validation failure."
+            )
+        raise ValueError(
+            "Connector features must contain an 'id' field matching the "
+            "'connector_id' values in the segment connectors JSON."
+        )
+
     try:
+        # ------------------------------------------------------------------
+        # Build connector_id -> point geometry lookup dict (single pass).
+        # ------------------------------------------------------------------
+        connector_geom_map: dict[str, arcpy.Geometry] = {}
+        with arcpy.da.SearchCursor(
+            connector_features, ["id", "SHAPE@"]
+        ) as conn_cursor:
+            for conn_id, geom in conn_cursor:
+                if conn_id is not None and geom is not None:
+                    connector_geom_map[str(conn_id)] = geom
+
+        logger.debug(
+            f"Built connector geometry lookup with "
+            f"{len(connector_geom_map):,} entries."
+        )
+
         # counters
         add_cnt = 0
         del_oid_lst: list[int] = []
@@ -1066,36 +1122,78 @@ def split_segments_at_connectors(
                     if not isinstance(connectors_list, list) or len(connectors_list) == 0:
                         continue
 
-                    # extract unique sorted fractions
-                    fractions = sorted(
-                        {
-                            float(c["at"])
-                            for c in connectors_list
-                            if "at" in c and c["at"] is not None
-                        }
-                    )
-
-                    # need at least 3 fractions to produce interior splits
-                    if len(fractions) < 3:
+                    # need at least 3 connector entries to have an interior split
+                    if len(connectors_list) < 3:
                         continue
 
                     geom = row[-1]
-                    line_length = geom.length
+                    if geom is None:
+                        continue
 
-                    # create one sub-segment for each consecutive pair of fractions
-                    for i in range(len(fractions) - 1):
-                        start_frac = fractions[i]
-                        end_frac = fractions[i + 1]
+                    line_length = geom.length
+                    if line_length == 0:
+                        continue
+
+                    # ----------------------------------------------------------
+                    # Resolve connector_ids to point geometries and compute
+                    # their distance along the segment polyline.
+                    # ----------------------------------------------------------
+                    distances: list[float] = []
+                    for entry in connectors_list:
+                        cid = entry.get("connector_id")
+                        if cid is None:
+                            continue
+
+                        pt_geom = connector_geom_map.get(str(cid))
+                        if pt_geom is None:
+                            logger.debug(
+                                f"Connector '{cid}' referenced by OID "
+                                f"{row[oid_idx]} not found in connector "
+                                f"features — skipping."
+                            )
+                            continue
+
+                        # queryPointAndDistance returns:
+                        # (point_on_line, distance_along, distance_from, right_side)
+                        result = geom.queryPointAndDistance(pt_geom)
+                        distance_along = result[1]
+                        distance_from_line = result[2]
+
+                        # skip if the connector is too far from the segment
+                        if distance_from_line > radius_value:
+                            logger.warning(
+                                f"Connector '{cid}' is {distance_from_line:.2f} "
+                                f"units from OID {row[oid_idx]} (exceeds "
+                                f"search_radius={search_radius}) — skipping."
+                            )
+                            continue
+
+                        distances.append(distance_along)
+
+                    # deduplicate and sort distances
+                    unique_distances = sorted(set(
+                        round(d, 8) for d in distances
+                    ))
+
+                    # need at least 3 unique positions to produce interior splits
+                    if len(unique_distances) < 3:
+                        continue
+
+                    # create one sub-segment for each consecutive pair of distances
+                    for i in range(len(unique_distances) - 1):
+                        start_dist = unique_distances[i]
+                        end_dist = unique_distances[i + 1]
 
                         new_row = list(row)
                         new_row[-1] = geom.segmentAlongLine(
-                            start_frac * line_length,
-                            end_frac * line_length,
+                            start_dist,
+                            end_dist,
                         )
                         insert_cursor.insertRow(new_row)
                         logger.debug(
                             f"Inserted connector sub-segment from "
-                            f"{start_frac:.4f} to {end_frac:.4f} for OID {row[oid_idx]}."
+                            f"{start_dist:.2f} to {end_dist:.2f} for "
+                            f"OID {row[oid_idx]}."
                         )
                         add_cnt += 1
 
