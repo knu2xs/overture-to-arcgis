@@ -177,7 +177,18 @@ class GetOvertureFeatures:
         )
         split_into_levels.value = False
 
-        params = [extent, out_fc, overture_type, add_primary_name, add_primary_category, split_at_connectors, out_connector_fc, split_into_subsegments, split_into_levels]
+        # boolean to add walk restrictions column to segments
+        add_walk_restrictions = arcpy.Parameter(
+            displayName="Add Walk Restrictions",
+            name="add_walk_restrictions",
+            datatype="GPBoolean",
+            parameterType="Optional",
+            direction="Input",
+            category="Post Processing"
+        )
+        add_walk_restrictions.value = False
+
+        params = [extent, out_fc, overture_type, add_primary_name, add_primary_category, split_at_connectors, out_connector_fc, split_into_subsegments, split_into_levels, add_walk_restrictions]
 
         return params
 
@@ -199,6 +210,7 @@ class GetOvertureFeatures:
         out_connector_fc = parameters[6]
         split_into_subsegments = parameters[7]
         split_into_levels = parameters[8]
+        add_walk_restrictions = parameters[9]
 
         selected_type = overture_type.valueAsText
         is_segment = selected_type == "segment"
@@ -219,11 +231,13 @@ class GetOvertureFeatures:
         split_at_connectors.enabled = is_segment
         split_into_subsegments.enabled = is_segment
         split_into_levels.enabled = is_segment
+        add_walk_restrictions.enabled = is_segment
 
         if not is_segment:
             split_at_connectors.value = False
             split_into_subsegments.value = False
             split_into_levels.value = False
+            add_walk_restrictions.value = False
             out_connector_fc.enabled = False
             out_connector_fc.parameterType = "Optional"
             out_connector_fc.value = None
@@ -255,6 +269,7 @@ class GetOvertureFeatures:
         out_connector_fc = parameters[6].valueAsText
         split_into_subsegments = parameters[7].value
         split_into_levels = parameters[8].value
+        add_walk_restrictions = parameters[9].value
         
         # describe the extent features
         desc = arcpy.Describe(extent_features)
@@ -333,6 +348,11 @@ class GetOvertureFeatures:
                 overture_to_arcgis.utils.add_primary_category_field(str(out_fc))
             else:
                 logger.warning("Skipping primary_category — 'categories' field not found in features.")
+
+        # add walk restrictions column if requested
+        if add_walk_restrictions:
+            logger.info("Adding walk_restrictions column to segment features.")
+            overture_to_arcgis.utils.add_restrictions_column(str(out_fc), modality_prefix="walk")
 
         return out_fc
 
