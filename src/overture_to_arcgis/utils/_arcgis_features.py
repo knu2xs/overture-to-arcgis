@@ -92,6 +92,9 @@ def _chain_sub_segments(
         The input tuples reordered so that each segment's end point
         matches the next segment's start point.
     """
+    # discard members with null geometry so chaining logic is safe
+    members = [(oid, geom) for oid, geom in members if geom is not None]
+
     if len(members) <= 1:
         return members
 
@@ -338,7 +341,18 @@ def split_into_subclass_features(
             ) as sc:
                 for oid, fid, geom in sc:
                     if fid is not None:
-                        id_groups.setdefault(fid, []).append((oid, geom))
+                        if geom is not None:
+                            id_groups.setdefault(fid, []).append(
+                                (oid, geom)
+                            )
+                        else:
+                            logger.debug(
+                                "Skipping OID %s with null geometry "
+                                "(id=%s).",
+                                oid,
+                                fid,
+                            )
+                            oid_frac_map[oid] = (0.0, 1.0)
                     else:
                         oid_frac_map[oid] = (0.0, 1.0)
 
@@ -347,7 +361,9 @@ def split_into_subclass_features(
                     oid_frac_map[members[0][0]] = (0.0, 1.0)
                 else:
                     chained = _chain_sub_segments(members)
-                    total_length = sum(g.length for _, g in chained)
+                    total_length = sum(
+                        g.length for _, g in chained if g is not None
+                    )
                     if total_length == 0:
                         for oid, _ in chained:
                             oid_frac_map[oid] = (0.0, 1.0)
@@ -674,7 +690,18 @@ def split_into_level_features(
             ) as sc:
                 for oid, fid, geom in sc:
                     if fid is not None:
-                        id_groups.setdefault(fid, []).append((oid, geom))
+                        if geom is not None:
+                            id_groups.setdefault(fid, []).append(
+                                (oid, geom)
+                            )
+                        else:
+                            logger.debug(
+                                "Skipping OID %s with null geometry "
+                                "(id=%s).",
+                                oid,
+                                fid,
+                            )
+                            oid_frac_map[oid] = (0.0, 1.0)
                     else:
                         oid_frac_map[oid] = (0.0, 1.0)
 
@@ -683,7 +710,9 @@ def split_into_level_features(
                     oid_frac_map[members[0][0]] = (0.0, 1.0)
                 else:
                     chained = _chain_sub_segments(members)
-                    total_length = sum(g.length for _, g in chained)
+                    total_length = sum(
+                        g.length for _, g in chained if g is not None
+                    )
                     if total_length == 0:
                         for oid, _ in chained:
                             oid_frac_map[oid] = (0.0, 1.0)
