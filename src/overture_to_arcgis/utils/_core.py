@@ -5,7 +5,7 @@ from geomet import wkb
 import tempfile
 from typing import Optional, Tuple, Generator, Union
 import uuid
-from warnings import warn
+
 
 from arcgis.geometry import Geometry
 import pandas as pd
@@ -604,12 +604,6 @@ def get_record_batches(
 
     # iterate through the batches and yield with geoarrow metadata
     for idx, batch in enumerate(batches):
-        # if this is the first batch, and it's empty, warn of no data found
-        if idx == 0 and batch.num_rows == 0:
-            warn(
-                f"No '{overture_type}' data found for the specified bounding box: {bbox}"
-            )
-
         # get the geometry field
         geo_fld_idx = batch.schema.get_field_index("geometry")
         geo_fld = batch.schema.field(geo_fld_idx)

@@ -143,12 +143,9 @@ def get_features(
 
     # iterate through the record batches to see if we have any data
     for btch_idx, batch in enumerate(batches):
-        # warn of no data found for the batch
+        # skip empty batches
         if batch.num_rows == 0:
-            logger.warning(
-                f"No '{overture_type}' data found for the specified bounding box: {bbox}. No temporary feature "
-                f"class will be created for this batch."
-            )
+            continue
 
         # if there is data to work with, process it
         else:
