@@ -110,6 +110,10 @@ def add_restrictions_column(
                     # set the restriction value in the row
                     row[2] = restriction
 
+                # provide a default restriction value if none is set
+                if row[2] is None:
+                    row[2] = 1.0
+
             cursor.updateRow(row)
 
     # make sure edge features are a path to return if path is a string
