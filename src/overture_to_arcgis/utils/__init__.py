@@ -29,7 +29,7 @@ from ._arcgis_features import (
     split_into_subclass_features,
     split_segments_at_connectors,
 )
-from ._arcgis_routing import add_restrictions_column
+from ._arcgis_routing import add_impedance_column, create_network_dataset
 
 __all__ = [
     "add_alternate_category_field",
@@ -39,8 +39,9 @@ __all__ = [
     "add_primary_category_field",
     "add_primary_name",
     "add_trail_field",
-    "add_restrictions_column",
+    "add_impedance_column",
     "add_website_field",
+    "create_network_dataset",
     "get_all_overture_types",
     "get_logger",
     "get_current_release",
