@@ -5,7 +5,9 @@ __license__ = "Apache 2.0"
 
 import importlib.util
 from pathlib import Path
+import shutil
 import sys
+from tempfile import mkdtemp
 
 import arcpy
 
@@ -36,7 +38,7 @@ if src_dir is not None:
 import overture_to_arcgis
 
 # add logger for the module
-logger = overture_to_arcgis.utils.get_logger("INFO", logger_name="overture_to_arcgis", add_arcpy_handler=True)
+logger = overture_to_arcgis.utils.get_logger(level="INFO", logger_name="overture_to_arcgis", add_arcpy_handler=True, add_stream_handler=False, propagate=False)
 
 
 class Toolbox:
@@ -58,7 +60,8 @@ class Toolbox:
             SplitSegmentsIntoSubclassFeatures,
             SplitSegmentsIntoLevelFeatures,
             SplitSegmentsAtConnectors,
-            AddWalkRestrictionsColumn
+            AddWalkImpedanceColumn,
+            CreateNetworkDataset
         ]
 
         # add H3 index field tool only if h3 is available
@@ -133,62 +136,7 @@ class GetOvertureFeatures:
         )
         add_primary_category.value = False
 
-        # boolean to split segments at connector points
-        split_at_connectors = arcpy.Parameter(
-            displayName="Split at Connectors",
-            name="split_at_connectors",
-            datatype="GPBoolean",
-            parameterType="Optional",
-            direction="Input",
-            category="Post Processing"
-        )
-        split_at_connectors.value = False
-
-        # output feature class for connector features (required when split_at_connectors is True)
-        out_connector_fc = arcpy.Parameter(
-            displayName="Output Connector Features",
-            name="out_connector_fc",
-            datatype="DEFeatureClass",
-            parameterType="Optional",
-            direction="Output",
-            category="Post Processing"
-        )
-        out_connector_fc.enabled = False
-
-        # boolean to split segments into subsegments by subclass rules
-        split_into_subsegments = arcpy.Parameter(
-            displayName="Split into Subsegments",
-            name="split_into_subsegments",
-            datatype="GPBoolean",
-            parameterType="Optional",
-            direction="Input",
-            category="Post Processing"
-        )
-        split_into_subsegments.value = False
-
-        # boolean to split segments into subsegments by level rules
-        split_into_levels = arcpy.Parameter(
-            displayName="Split into Levels",
-            name="split_into_levels",
-            datatype="GPBoolean",
-            parameterType="Optional",
-            direction="Input",
-            category="Post Processing"
-        )
-        split_into_levels.value = False
-
-        # boolean to add walk restrictions column to segments
-        add_walk_restrictions = arcpy.Parameter(
-            displayName="Add Walk Restrictions",
-            name="add_walk_restrictions",
-            datatype="GPBoolean",
-            parameterType="Optional",
-            direction="Input",
-            category="Post Processing"
-        )
-        add_walk_restrictions.value = False
-
-        params = [extent, out_fc, overture_type, add_primary_name, add_primary_category, split_at_connectors, out_connector_fc, split_into_subsegments, split_into_levels, add_walk_restrictions]
+        params = [extent, out_fc, overture_type, add_primary_name, add_primary_category]
 
         return params
 
@@ -202,18 +150,12 @@ class GetOvertureFeatures:
     _TYPES_WITH_CATEGORIES = {"place"}
 
     def updateParameters(self, parameters):
-        """Show post processing parameters only for applicable types; enable connector output when splitting."""
+        """Show post processing parameters only for applicable types."""
         overture_type = parameters[2]
         add_primary_name = parameters[3]
         add_primary_category = parameters[4]
-        split_at_connectors = parameters[5]
-        out_connector_fc = parameters[6]
-        split_into_subsegments = parameters[7]
-        split_into_levels = parameters[8]
-        add_walk_restrictions = parameters[9]
 
         selected_type = overture_type.valueAsText
-        is_segment = selected_type == "segment"
 
         # --- primary name: only for types with a 'names' field ---
         has_names = selected_type in self._TYPES_WITH_NAMES
@@ -227,33 +169,6 @@ class GetOvertureFeatures:
         if not has_categories:
             add_primary_category.value = False
 
-        # --- segment-only post processing options ---
-        split_at_connectors.enabled = is_segment
-        split_into_subsegments.enabled = is_segment
-        split_into_levels.enabled = is_segment
-        add_walk_restrictions.enabled = is_segment
-
-        if not is_segment:
-            split_at_connectors.value = False
-            split_into_subsegments.value = False
-            split_into_levels.value = False
-            add_walk_restrictions.value = False
-            out_connector_fc.enabled = False
-            out_connector_fc.parameterType = "Optional"
-            out_connector_fc.value = None
-        elif split_at_connectors.value:
-            out_connector_fc.enabled = True
-            out_connector_fc.parameterType = "Required"
-            # Auto-populate with same GDB as output features, named "connectors"
-            out_fc = parameters[1]
-            if out_fc.valueAsText and not out_connector_fc.altered:
-                out_fc_path = Path(out_fc.valueAsText)
-                out_connector_fc.value = str(out_fc_path.parent / "connectors")
-        else:
-            out_connector_fc.enabled = False
-            out_connector_fc.parameterType = "Optional"
-            out_connector_fc.value = None
-
         return
 
     def execute(self, parameters, messages):
@@ -265,11 +180,6 @@ class GetOvertureFeatures:
         overture_type = parameters[2].valueAsText
         add_primary_name = parameters[3].value
         add_primary_category = parameters[4].value
-        split_at_connectors = parameters[5].value
-        out_connector_fc = parameters[6].valueAsText
-        split_into_subsegments = parameters[7].value
-        split_into_levels = parameters[8].value
-        add_walk_restrictions = parameters[9].value
         
         # describe the extent features
         desc = arcpy.Describe(extent_features)
@@ -303,36 +213,6 @@ class GetOvertureFeatures:
 
         # --- Post Processing ---
 
-        # split segments at connector points if requested
-        if split_at_connectors:
-            # download connector features for the same extent
-            logger.info(f"Retrieving 'connector' features for extent: {bbox}.")
-            out_connector_fc_path = Path(out_connector_fc)
-            overture_to_arcgis.get_features(out_connector_fc_path, bbox=bbox, overture_type="connector")
-
-            # clip connector features to the input extent
-            conn_lyr = arcpy.management.MakeFeatureLayer(str(out_connector_fc_path))[0]
-            arcpy.management.SelectLayerByLocation(
-                conn_lyr, "INTERSECT", ext_lyr,
-                selection_type="NEW_SELECTION", invert_spatial_relationship=True
-            )
-            arcpy.management.DeleteFeatures(conn_lyr)
-
-            logger.info("Splitting segments at connector points.")
-            overture_to_arcgis.utils.split_segments_at_connectors(
-                str(out_fc), connector_features=str(out_connector_fc_path)
-            )
-
-        # split segments into subsegments by subclass rules if requested
-        if split_into_subsegments:
-            logger.info("Splitting segments into subsegments by subclass rules.")
-            overture_to_arcgis.utils.split_into_subclass_features(str(out_fc))
-
-        # split segments into subsegments by level rules if requested
-        if split_into_levels:
-            logger.info("Splitting segments into level features by level rules.")
-            overture_to_arcgis.utils.split_into_level_features(str(out_fc))
-
         # add primary name field if requested
         if add_primary_name:
             field_names = [f.name for f in arcpy.ListFields(str(out_fc))]
@@ -350,11 +230,6 @@ class GetOvertureFeatures:
                 overture_to_arcgis.utils.add_primary_category_field(str(out_fc))
             else:
                 logger.warning("Skipping primary_category — 'categories' field not found in features.")
-
-        # add walk restrictions column if requested
-        if add_walk_restrictions:
-            logger.info("Adding walk_restrictions column to segment features.")
-            overture_to_arcgis.utils.add_restrictions_column(str(out_fc), modality_prefix="walk")
 
         return out_fc
 
@@ -953,12 +828,12 @@ class SplitSegmentsIntoLevelFeatures:
         return
 
 
-class AddWalkRestrictionsColumn:
-    """Tool to add walk restriction column to a feature class."""
+class AddWalkImpedanceColumn:
+    """Tool to add walk impedance column to a feature class."""
     def __init__(self):
-        self.label = "Add Walk Restrictions Column (Segments)"
+        self.label = "Add Walk Impedance Column (Segments)"
         self.description = (
-            "Add walk restrictions column to a feature class to using features for walk network routing."
+            "Add walk impedance column to a feature class to using features for walk network routing."
         )
         self.category = "Add Parsed Fields"
 
@@ -983,7 +858,212 @@ class AddWalkRestrictionsColumn:
         # retrieve the data directory path from parameters
         input_features = parameters[0].valueAsText
 
-        # add walk restriction column
-        overture_to_arcgis.utils.add_restrictions_column(input_features, modality_prefix="walk")
+        # add walk impedance column
+        overture_to_arcgis.utils.add_impedance_column(input_features, modality_prefix="walk")
+
+        return
+
+
+class CreateNetworkDataset:
+    """Tool to create a network dataset from Overture segment and connector features."""
+    def __init__(self):
+        self.label = "Create Network Dataset"
+        self.description = (
+            "Create a network dataset from Overture segment (edge) and connector features. "
+            "Performs subclass splitting, level splitting, connector splitting, access restriction "
+            "field creation, and walk impedance calculation before building the network dataset."
+        )
+        # self.category = "Utilities"
+
+    def getParameterInfo(self):
+
+        # option to download data from Overture Maps
+        download_data = arcpy.Parameter(
+            displayName="Download Data",
+            name="download_data",
+            datatype="GPBoolean",
+            parameterType="Required",
+            direction="Input"
+        )
+        download_data.value = False
+
+        # extent for downloading data
+        extent = arcpy.Parameter(
+            displayName="Extent",
+            name="extent",
+            datatype="GPFeatureRecordSetLayer",
+            parameterType="Optional",
+            direction="Input"
+        )
+
+        # input segment features
+        segment_features = arcpy.Parameter(
+            displayName="Segment Features",
+            name="segment_features",
+            datatype="GPFeatureLayer",
+            parameterType="Optional",
+            direction="Input"
+        )
+        segment_features.filter.list = ["Polyline"]
+
+        # input connector point features
+        connector_features = arcpy.Parameter(
+            displayName="Connector Features",
+            name="connector_features",
+            datatype="GPFeatureLayer",
+            parameterType="Optional",
+            direction="Input"
+        )
+        connector_features.filter.list = ["Point"]
+
+        # output geodatabase
+        geodatabase = arcpy.Parameter(
+            displayName="Output Geodatabase",
+            name="geodatabase",
+            datatype="DEWorkspace",
+            parameterType="Required",
+            direction="Input"
+        )
+        geodatabase.filter.list = ["Local Database"]
+
+        # feature dataset name
+        feature_dataset_name = arcpy.Parameter(
+            displayName="Feature Dataset Name",
+            name="feature_dataset_name",
+            datatype="GPString",
+            parameterType="Optional",
+            direction="Input"
+        )
+        feature_dataset_name.value = "overture_transportation"
+
+        # network dataset name
+        network_dataset_name = arcpy.Parameter(
+            displayName="Network Dataset Name",
+            name="network_dataset_name",
+            datatype="GPString",
+            parameterType="Optional",
+            direction="Input"
+        )
+        network_dataset_name.value = "overture_network"
+
+        params = [download_data, extent, segment_features, connector_features, geodatabase, feature_dataset_name, network_dataset_name]
+
+        return params
+
+    def updateParameters(self, parameters):
+        """Toggle parameter availability based on download data selection."""
+        download_data = parameters[0].value
+
+        if download_data:
+            parameters[1].enabled = True    # extent
+            parameters[2].enabled = False   # segment_features
+            parameters[3].enabled = False   # connector_features
+        else:
+            parameters[1].enabled = False   # extent
+            parameters[2].enabled = True    # segment_features
+            parameters[3].enabled = True    # connector_features
+
+        return
+
+    def updateMessages(self, parameters):
+        """Validate parameters based on download data selection."""
+        download_data = parameters[0].value
+
+        if download_data:
+            if not parameters[1].valueAsText:
+                parameters[1].setErrorMessage("Extent is required when downloading data.")
+        else:
+            if not parameters[2].valueAsText:
+                parameters[2].setErrorMessage("Segment Features is required when not downloading data.")
+            if not parameters[3].valueAsText:
+                parameters[3].setErrorMessage("Connector Features is required when not downloading data.")
+
+        return
+
+    def execute(self, parameters, messages):
+        """Create a network dataset from edge and connector features."""
+        # retrieve parameters
+        download_data = parameters[0].value
+        geodatabase = parameters[4].valueAsText
+        feature_dataset_name = parameters[5].valueAsText or "overture_transportation"
+        network_dataset_name = parameters[6].valueAsText or "overture_network"
+
+        # variable for the temporary directory, so can be correctly handled in finally block below
+        temp_dir = None
+
+        try:
+            if download_data:
+                extent_features = parameters[1].value
+                desc = arcpy.Describe(extent_features)
+                extent = desc.extent
+                spatial_reference = desc.spatialReference
+
+                if spatial_reference.factoryCode != 4326:
+                    logger.info("Projecting extent to WGS84 (EPSG:4326).")
+                    projected_extent = extent.projectAs(arcpy.SpatialReference(4326))
+                    bbox = (projected_extent.XMin, projected_extent.YMin, projected_extent.XMax, projected_extent.YMax)
+                else:
+                    bbox = (extent.XMin, extent.YMin, extent.XMax, extent.YMax)
+
+                # create temp directory and geodatabase for downloaded data
+                temp_dir = mkdtemp()
+                temp_gdb_name = "overture_temp.gdb"
+                arcpy.management.CreateFileGDB(temp_dir, temp_gdb_name)
+                temp_gdb = str(Path(temp_dir) / temp_gdb_name)
+
+                logger.info(f"Downloading segment features.")
+                segment_fc = str(Path(temp_gdb) / "segments")
+                overture_to_arcgis.get_features(segment_fc, bbox=bbox, overture_type="segment")
+
+                logger.info(f"Downloading connector features.")
+                connector_fc = str(Path(temp_gdb) / "connectors")
+                overture_to_arcgis.get_features(connector_fc, bbox=bbox, overture_type="connector")
+
+                # remove features outside the extent geometry
+                ext_lyr = arcpy.management.MakeFeatureLayer(extent_features)[0]
+
+                seg_lyr = arcpy.management.MakeFeatureLayer(segment_fc)[0]
+                arcpy.management.SelectLayerByLocation(seg_lyr, "INTERSECT", ext_lyr, selection_type="NEW_SELECTION", invert_spatial_relationship=True)
+                arcpy.management.DeleteFeatures(seg_lyr)
+
+                con_lyr = arcpy.management.MakeFeatureLayer(connector_fc)[0]
+                arcpy.management.SelectLayerByLocation(con_lyr, "INTERSECT", ext_lyr, selection_type="NEW_SELECTION", invert_spatial_relationship=True)
+                arcpy.management.DeleteFeatures(con_lyr)
+
+                segment_features = segment_fc
+                connector_features = connector_fc
+            else:
+                segment_features = parameters[2].valueAsText
+                connector_features = parameters[3].valueAsText
+
+            logger.info(f"Creating network dataset '{network_dataset_name}' in '{geodatabase}'.")
+
+            # create the network dataset
+            result = overture_to_arcgis.utils.create_network_dataset(
+                segment_features=segment_features,
+                connector_features=connector_features,
+                geodatabase=geodatabase,
+                feature_dataset_name=feature_dataset_name,
+                network_dataset_name=network_dataset_name,
+            )
+
+            logger.info(f"Network dataset created at '{result}'.")
+
+            # get the current map document, and add the network to it
+            try:
+                aprx = arcpy.mp.ArcGISProject("CURRENT")
+                current_map = aprx.activeMap
+                if current_map is not None:
+                    current_map.addDataFromPath(result)
+                    logger.info("Network dataset added to the current map.")
+                else:
+                    logger.warning("No active map found; network dataset was not added to a map.")
+            except Exception:
+                logger.warning("Could not add network dataset to a map (not running inside ArcGIS Pro).")
+
+        finally:
+            if temp_dir is not None:
+                logger.info(f"Cleaning up temporary directory '{temp_dir}'.")
+                shutil.rmtree(temp_dir, ignore_errors=True)
 
         return
