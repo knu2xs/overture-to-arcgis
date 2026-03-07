@@ -1,2 +1,2 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<metadata xml:lang="en"><Esri><CreaDate>20251028</CreaDate><CreaTime>15253200</CreaTime><ArcGISFormat>1.0</ArcGISFormat><SyncOnce>TRUE</SyncOnce></Esri></metadata>
+<metadata xml:lang="en"><Esri><CreaDate>20251028</CreaDate><CreaTime>15253200</CreaTime><ArcGISFormat>1.0</ArcGISFormat><SyncOnce>TRUE</SyncOnce><ModDate>20260306</ModDate><ModTime>162436</ModTime></Esri><tool name="AddSubclasses" displayname="Add Subclasses" toolboxalias="overture_to_arcgis" category="Utilities"><summary>Deprecated: This tool has been superseded by Split Segments into Subclass Features, which provides more robust splitting logic including overlapping geometry support and optional output to a new feature class.</summary></tool></metadata>
