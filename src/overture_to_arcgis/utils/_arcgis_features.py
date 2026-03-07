@@ -208,6 +208,7 @@ def _get_overlapping_pieces(
 def split_into_subclass_features(
     features: Union[str, Path, arcpy._mp.Layer],
     output_features: Optional[Union[str, Path]] = None,
+    remove_original_field: Optional[bool] = False
 ) -> Optional[str]:
     """
     Split features into subsegments based on the definition in the `subclass_rules` field.
@@ -254,6 +255,9 @@ def split_into_subclass_features(
         output_features: Optional path to an output feature class.  When
             supplied, the input features are copied here before splitting
             and the original data is left untouched.
+        remove_original_field: When ``True``, the ``subclass_rules``
+            field is deleted from the feature class after the split is
+            complete.
 
     Returns:
         The path to the output feature class when `output_features` is
@@ -533,6 +537,13 @@ def split_into_subclass_features(
 
         logger.debug("Deleted temporary file geodatabase.")
 
+        # remove the subclass_rules field if requested
+        if remove_original_field:
+            arcpy.management.DeleteField(features, [subclass_rules_field])
+            logger.debug(
+                f"Removed '{subclass_rules_field}' field from features."
+            )
+
         # log the final counts
         final_count = int(arcpy.management.GetCount(features)[0])
         logger.info(
@@ -555,6 +566,7 @@ def split_into_subclass_features(
 def split_into_level_features(
     features: Union[str, Path, arcpy._mp.Layer],
     output_features: Optional[Union[str, Path]] = None,
+    remove_original_field: Optional[bool] = False,
 ) -> Optional[str]:
     """
     Split features into subsegments based on the `level_rules` field and populate a `z_index` field.
@@ -602,6 +614,9 @@ def split_into_level_features(
         output_features: Optional path to an output feature class.  When
             supplied, the input features are copied here before splitting
             and the original data is left untouched.
+        remove_original_field: When ``True``, the ``level_rules``
+            field is deleted from the feature class after the split is
+            complete.
 
     Returns:
         The path to the output feature class when `output_features` is
@@ -780,6 +795,12 @@ def split_into_level_features(
 
                         # common indices resolved once per feature
                         geom = row[-1]
+                        if geom is None:
+                            logger.warning(
+                                "Skipping feature with null geometry "
+                                f"(OID {row[0]})."
+                            )
+                            continue
                         z_index_idx = cursor_fields.index("z_index")
                         oid_idx = cursor_fields.index(desc.OIDFieldName)
 
@@ -890,6 +911,13 @@ def split_into_level_features(
 
         logger.debug("Deleted temporary file geodatabase.")
 
+        # remove the level_rules field if requested
+        if remove_original_field:
+            arcpy.management.DeleteField(features, [level_rules_field])
+            logger.debug(
+                f"Removed '{level_rules_field}' field from features."
+            )
+
         # log the final counts
         final_count = int(arcpy.management.GetCount(features)[0])
         logger.info(
@@ -915,6 +943,7 @@ def split_segments_at_connectors(
     connector_features: Union[str, Path, arcpy._mp.Layer],
     output_features: Optional[Union[str, Path]] = None,
     search_radius: str = "10 Meters",
+    delete_connectors_field: Optional[bool] = False
 ) -> Optional[str]:
     """
     Split segment polylines at connector point geometries listed in the `connectors` field.
@@ -973,6 +1002,9 @@ def split_segments_at_connectors(
             segment to be considered valid.  Points farther away are
             skipped with a warning.  Accepts any linear unit string
             recognised by arcpy (e.g. ``"10 Meters"``).
+        delete_connectors_field: When ``True``, the ``connectors``
+            field is deleted from the feature class after the split is
+            complete.
 
     Returns:
         The path to the output feature class when `output_features` is
@@ -1220,6 +1252,13 @@ def split_segments_at_connectors(
         # clean up temporary geodatabase
         shutil.rmtree(tmp_gdb, ignore_errors=True)
         logger.debug("Deleted temporary file geodatabase.")
+
+        # remove the connectors field if requested
+        if delete_connectors_field:
+            arcpy.management.DeleteField(features, [connectors_field])
+            logger.debug(
+                f"Removed '{connectors_field}' field from features."
+            )
 
         # log final counts
         final_count = int(arcpy.management.GetCount(features)[0])

@@ -6,7 +6,7 @@ fields and one-way network restriction fields to ArcGIS feature classes.
 
 import json
 from pathlib import Path
-from typing import Union
+from typing import Optional, Union
 
 import arcpy
 
@@ -135,6 +135,7 @@ def get_boolean_access_restrictions(
 def add_boolean_access_restrictions_fields(
     features: Union[str, Path, arcpy._mp.Layer],
     access_field: str = "access_restrictions",
+    remove_original_field: Optional[bool] = False,
 ) -> None:
     """
     Add boolean access restriction fields to the input features based on the access_restrictions field.
@@ -142,6 +143,9 @@ def add_boolean_access_restrictions_fields(
     Args:
         features: The input feature layer or feature class.
         access_field: The name of the access restrictions field.
+        remove_original_field: When ``True``, the ``access_field``
+            field is deleted from the feature class after the boolean
+            fields have been populated.
     """
     # if features is a path, convert to string - arcpy cannot handle Path objects
     if isinstance(features, Path):
@@ -185,6 +189,13 @@ def add_boolean_access_restrictions_fields(
             for idx, key in enumerate(unique_keys):
                 row[idx + 1] = bool_dict.get(key, 0)
             cursor.updateRow(row)
+
+    # remove the original access restrictions field if requested
+    if remove_original_field:
+        arcpy.management.DeleteField(features, [access_field])
+        logger.debug(
+            f"Removed '{access_field}' field from features."
+        )
 
 
 def add_network_restriction_oneway_field(
