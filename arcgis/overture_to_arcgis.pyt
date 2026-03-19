@@ -885,7 +885,7 @@ class CreateNetworkDataset:
             parameterType="Required",
             direction="Input"
         )
-        download_data.value = False
+        download_data.value = True
 
         # extent for downloading data
         extent = arcpy.Parameter(
@@ -997,13 +997,39 @@ class CreateNetworkDataset:
                 desc = arcpy.Describe(extent_features)
                 extent = desc.extent
                 spatial_reference = desc.spatialReference
+                is_point_input = desc.shapeType in ("Point", "Multipoint")
 
-                if spatial_reference.factoryCode != 4326:
-                    logger.info("Projecting extent to WGS84 (EPSG:4326).")
-                    projected_extent = extent.projectAs(arcpy.SpatialReference(4326))
-                    bbox = (projected_extent.XMin, projected_extent.YMin, projected_extent.XMax, projected_extent.YMax)
+                wgs84 = arcpy.SpatialReference(4326)
+
+                if is_point_input:
+                    # project to WGS84 first if needed, then derive extent from actual coordinates
+                    if spatial_reference.factoryCode != 4326:
+                        logger.info("Projecting point features to WGS84 (EPSG:4326).")
+                        pts_for_extent = arcpy.management.Project(extent_features, "memory/extent_points_proj", wgs84)[0]
+                    else:
+                        pts_for_extent = extent_features
+
+                    x_coords, y_coords = [], []
+                    with arcpy.da.SearchCursor(pts_for_extent, ["SHAPE@XY"]) as cursor:
+                        for row in cursor:
+                            x, y = row[0]
+                            x_coords.append(x)
+                            y_coords.append(y)
+
+                    buffer_dist = 1609.344 / 111320.0  # approx. 1 mile in degrees
+                    logger.info("Point features provided as area of interest; expanding extent by ~1 mile in each direction.")
+                    extent = arcpy.Extent(
+                        min(x_coords) - buffer_dist,
+                        min(y_coords) - buffer_dist,
+                        max(x_coords) + buffer_dist,
+                        max(y_coords) + buffer_dist,
+                    )
                 else:
-                    bbox = (extent.XMin, extent.YMin, extent.XMax, extent.YMax)
+                    if spatial_reference.factoryCode != 4326:
+                        logger.info("Projecting extent to WGS84 (EPSG:4326).")
+                        extent = extent.projectAs(wgs84)
+
+                bbox = (extent.XMin, extent.YMin, extent.XMax, extent.YMax)
                 logger.info(f"Retrieving Overture features for extent: {bbox}.")
 
                 # create temp directory and geodatabase for downloaded data
@@ -1020,9 +1046,19 @@ class CreateNetworkDataset:
                 connector_fc = str(Path(temp_gdb) / "connectors")
                 overture_to_arcgis.get_features(connector_fc, bbox=bbox, overture_type="connector")
 
-                # remove features outside the extent geometry
-                ext_lyr = arcpy.management.MakeFeatureLayer(extent_features)[0]
+                # create feature layer for extent features
+                logger.debug("Creating feature layer for extent features to use for spatial filtering.")
+                array = arcpy.Array([
+                    arcpy.Point(extent.XMin, extent.YMin),
+                    arcpy.Point(extent.XMin, extent.YMax),
+                    arcpy.Point(extent.XMax, extent.YMax),
+                    arcpy.Point(extent.XMax, extent.YMin),
+                    arcpy.Point(extent.XMin, extent.YMin),
+                ])
+                extent_polygon = arcpy.management.CopyFeatures([arcpy.Polygon(array, wgs84)], "memory/extent_polygon")[0]
+                ext_lyr = arcpy.management.MakeFeatureLayer(extent_polygon)[0]
 
+                # remove features outside the extent geometry
                 seg_lyr = arcpy.management.MakeFeatureLayer(segment_fc)[0]
                 arcpy.management.SelectLayerByLocation(seg_lyr, "INTERSECT", ext_lyr, selection_type="NEW_SELECTION", invert_spatial_relationship=True)
                 arcpy.management.DeleteFeatures(seg_lyr)
