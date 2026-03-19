@@ -218,22 +218,22 @@ def create_network_dataset(
             f"Using existing feature dataset '{feature_dataset_name}' in geodatabase."
         )
 
-    # if the segment features are not in the feature dataset, move them into it
+    # copy segment features into the feature dataset, overwriting any previous run's data
     segments_in_dataset = os.path.join(feature_dataset_path, "segments")
-    if not arcpy.Exists(segments_in_dataset):
-        arcpy.management.CopyFeatures(segment_features, segments_in_dataset)
-        logger.info(f"Copied segment features '{segment_features}' to feature dataset '{feature_dataset_name}'.")
-    else:
-        logger.info(f"Segment features '{segment_features}' already exist in feature dataset '{feature_dataset_name}'.")
+    if arcpy.Exists(segments_in_dataset):
+        arcpy.management.Delete(segments_in_dataset)
+        logger.info(f"Deleted existing segment features from feature dataset '{feature_dataset_name}'.")
+    arcpy.management.CopyFeatures(segment_features, segments_in_dataset)
+    logger.info(f"Copied segment features '{segment_features}' to feature dataset '{feature_dataset_name}'.")
 
-    # if connector features are provided, and not already in the feature dataset, move them into it
+    # copy connector features into the feature dataset, overwriting any previous run's data
     if connector_features is not None:
         connector_features_in_dataset = os.path.join(feature_dataset_path, "connectors")
-        if not arcpy.Exists(connector_features_in_dataset):
-            arcpy.management.CopyFeatures(connector_features, connector_features_in_dataset)
-            logger.info(f"Copied connector features '{connector_features}' to feature dataset '{feature_dataset_name}'.")
-        else:
-            logger.info(f"Connector features '{connector_features}' already exist in feature dataset '{feature_dataset_name}'.")
+        if arcpy.Exists(connector_features_in_dataset):
+            arcpy.management.Delete(connector_features_in_dataset)
+            logger.info(f"Deleted existing connector features from feature dataset '{feature_dataset_name}'.")
+        arcpy.management.CopyFeatures(connector_features, connector_features_in_dataset)
+        logger.info(f"Copied connector features '{connector_features}' to feature dataset '{feature_dataset_name}'.")
 
     # if the primary name column is not in the segment features, add and populate
     if "primary_name" not in [f.name for f in arcpy.ListFields(segments_in_dataset)]:
@@ -259,7 +259,7 @@ def create_network_dataset(
     add_boolean_access_restrictions_fields(segments_in_dataset, remove_original_field=True)
 
     # ensure the walk-prohibition field always exists for the network dataset template
-    _FOOT_ACCESS_FIELD = "access_designated_when_mode_foot"
+    _FOOT_ACCESS_FIELD = "access_denied_when_mode_foot"
     if _FOOT_ACCESS_FIELD not in [f.name for f in arcpy.ListFields(segments_in_dataset)]:
         arcpy.management.AddField(
             in_table=segments_in_dataset,
@@ -283,6 +283,12 @@ def create_network_dataset(
             content = f.read()
         with open(NETWORK_WALK_PATH, "w", encoding="utf-8") as f:
             f.write('<?xml version="1.0" encoding="utf-8"?>\n' + content)
+
+    # delete existing network dataset before recreating to avoid conflicts on re-runs
+    network_dataset_path = os.path.join(feature_dataset_path, network_dataset_name)
+    if arcpy.Exists(network_dataset_path):
+        arcpy.management.Delete(network_dataset_path)
+        logger.info(f"Deleted existing network dataset '{network_dataset_name}' before recreating.")
 
     # create the network dataset
     logger.info(f"Creating network dataset '{network_dataset_name}' in feature dataset '{feature_dataset_path}'.")
