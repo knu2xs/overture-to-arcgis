@@ -258,6 +258,18 @@ def create_network_dataset(
     logger.info(f"Adding boolean access restriction fields.")
     add_boolean_access_restrictions_fields(segments_in_dataset, remove_original_field=True)
 
+    # ensure the walk-prohibition field always exists for the network dataset template
+    _FOOT_ACCESS_FIELD = "access_designated_when_mode_foot"
+    if _FOOT_ACCESS_FIELD not in [f.name for f in arcpy.ListFields(segments_in_dataset)]:
+        arcpy.management.AddField(
+            in_table=segments_in_dataset,
+            field_name=_FOOT_ACCESS_FIELD,
+            field_type="SHORT",
+        )
+        logger.debug(f"Added missing field '{_FOOT_ACCESS_FIELD}' as SHORT to segment features.")
+    else:
+        logger.debug(f"Field '{_FOOT_ACCESS_FIELD}' already exists in segment features.")
+
     # add walk impedance column
     logger.info(f"Adding walk impedance column to segment features '{segments_in_dataset}'.")
     add_impedance_column(segments_in_dataset, modality_prefix="walk")
