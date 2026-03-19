@@ -1004,6 +1004,7 @@ class CreateNetworkDataset:
                     bbox = (projected_extent.XMin, projected_extent.YMin, projected_extent.XMax, projected_extent.YMax)
                 else:
                     bbox = (extent.XMin, extent.YMin, extent.XMax, extent.YMax)
+                logger.info(f"Retrieving Overture features for extent: {bbox}.")
 
                 # create temp directory and geodatabase for downloaded data
                 temp_dir = mkdtemp()
