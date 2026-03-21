@@ -60,7 +60,7 @@ class Toolbox:
             SplitSegmentsIntoSubclassFeatures,
             SplitSegmentsIntoLevelFeatures,
             SplitSegmentsAtConnectors,
-            AddWalkImpedanceColumn,
+            AddImpedanceColumn,
             CreateNetworkDataset
         ]
 
@@ -828,38 +828,94 @@ class SplitSegmentsIntoLevelFeatures:
         return
 
 
-class AddWalkImpedanceColumn:
-    """Tool to add walk impedance column to a feature class."""
+class AddImpedanceColumn:
+    """Tool to add an impedance cost-multiplier field to edge features for a chosen routing modality."""
+
     def __init__(self):
-        self.label = "Add Walk Impedance Column (Segments)"
+        self.label = "Add Impedance Column (Segments)"
         self.description = (
-            "Add walk impedance column to a feature class to using features for walk network routing."
+            "Add an impedance cost-multiplier field to edge features for a chosen routing modality. "
+            "Supports predefined modalities (walk, bike) with editable coefficients and custom "
+            "modality names."
         )
         self.category = "Add Parsed Fields"
 
     def getParameterInfo(self):
 
-        # create a parameter to set the input feature layer
         input_features = arcpy.Parameter(
             displayName="Input Features",
             name="input_features",
             datatype="GPFeatureLayer",
             parameterType="Required",
-            direction="Input"
+            direction="Input",
         )
 
-        params = [input_features]
+        modality = arcpy.Parameter(
+            displayName="Modality",
+            name="modality",
+            datatype="GPString",
+            parameterType="Required",
+            direction="Input",
+        )
+        modality.filter.type = "ValueList"
+        modality.filter.list = overture_to_arcgis.utils._arcgis_routing.SUPPORTED_MODALITIES
+        modality.value = "walk"
 
-        return params
+        coefficients = arcpy.Parameter(
+            displayName="Coefficients",
+            name="coefficients",
+            datatype="GPValueTable",
+            parameterType="Required",
+            direction="Input",
+        )
+        coefficients.columns = [
+            ["GPString", "Field Name"],
+            ["GPString", "Value"],
+            ["GPDouble", "Multiplier"],
+        ]
+
+        return [input_features, modality, coefficients]
+
+    def updateParameters(self, parameters):
+        """Pre-populate the coefficient table when the modality selection changes."""
+        if parameters[1].altered:
+            from overture_to_arcgis.utils._core import slugify
+            mod = slugify(parameters[1].valueAsText or "")
+            registry = overture_to_arcgis.utils._arcgis_routing._IMPEDANCE_REGISTRY
+            if mod in registry:
+                rows = []
+                for field_name, mapping in registry[mod].items():
+                    for value, multiplier in mapping.items():
+                        rows.append([field_name, value, multiplier])
+                parameters[2].value = rows
+            else:
+                parameters[2].value = None
+
+    def updateMessages(self, parameters):
+        """Block execution when the coefficient table is empty."""
+        if parameters[2].value is None or len(parameters[2].values or []) == 0:
+            parameters[2].setErrorMessage(
+                "Coefficients table must have at least one row before running."
+            )
 
     def execute(self, parameters, messages):
         """The source code of the tool."""
-
-        # retrieve the data directory path from parameters
         input_features = parameters[0].valueAsText
+        modality = parameters[1].valueAsText
 
-        # add walk impedance column
-        overture_to_arcgis.utils.add_impedance_column(input_features, modality_prefix="walk")
+        # reconstruct the nested coefficients dict from the GPValueTable rows
+        coefficients = {}
+        for row in parameters[2].values:
+            field_name = str(row[0])
+            value = str(row[1])
+            multiplier = float(row[2])
+            coefficients.setdefault(field_name, {})[value] = multiplier
+
+        overture_to_arcgis.utils.add_impedance_column(
+            input_features,
+            modality_prefix=modality,
+            coefficients=coefficients,
+        )
 
         return
 
